@@ -163,7 +163,14 @@ fork): run `cgm/dexcomg7/copy-dexcom-sounds.sh "<dexcom sounds folder>"` before 
   "never" = until the condition has been gone 15 min), sound (own soft/medium/intense/classic + 13
   extra sounds), **first alarm vibrate only**, test sound.
 - Global: master switch, minimum alarm volume (raises STREAM_ALARM while playing, then puts it
-  back), sound until acknowledged (default off: plays once, like Dexcom).
+  back). The sound plays once per alert; the 5-minute reminder is what repeats it.
+- Settings order (not the priority order): General, Low, Urgent low, Urgent low soon, High, Rise
+  rate, Fall rate, Signal loss, Brief sensor issue, Sensor failed, Sensor end.
+- "Sensor end" goes off at each `G7SessionMilestone`: 24/6/2 h before the nominal end, when the
+  12 h grace period starts, 6/2 h before the grace period ends, and when readings stop. Each is a
+  new alert (the engine's `episode`). The same moments are posted to the AAPS notification list.
+- Alarm events (goes off, reminder, sent to watch, acknowledged where, stopped) go to the G7 log.
+- Watch vibration runs at amplitude 255 where the watch supports amplitude control.
 - Not acknowledged: comes back every 5 min with sound. Within a group (low / high / sensor) only
   the most important active alarm goes off.
 - Sound on `USAGE_ALARM` like the AAPS alarm with override DND: plays on silent and vibrate. It is
@@ -178,3 +185,11 @@ fork): run `cgm/dexcomg7/copy-dexcom-sounds.sh "<dexcom sounds folder>"` before 
   (`SnoozeAlert`), acknowledge on the phone. Per alarm: watch vibration by day and at night
   (off / 3 / 5 / 7 / 10 s); night hours are global (default 22:00-07:00). The phone notification is
   `setLocalOnly` so it is not also copied to the watch.
+
+## Log and reconnect (2026-09-27)
+
+- A link that comes right after a reading (the sensor still advertises for a moment) is now left
+  open and idle instead of being hung up. Hanging up re-armed at once and looped about 100 times a
+  second. The sensor ends the idle link itself; a fallback ends it when the 60 s quiet window is over.
+- The communication log keeps 24 hours (max 50 000 lines) in `filesDir/dexcom_g7_comm.log`, so it
+  survives a restart. "Save to file" writes it to `exports/DexcomG7_log_<time>.txt` in the AAPS folder.

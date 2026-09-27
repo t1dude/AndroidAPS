@@ -15,9 +15,7 @@ Changes made during implementation:
   source. A sensor icon in its toolbar leads to the G7 status, pairing and log screens. For this,
   `BgSourceComposeContent` in `:plugins:source` is public and takes optional extra toolbar actions.
 
-Open question: glucose alarms. AAPS has the missed-readings alarm (off by default) and Automation
-(BG / delta triggers + Alarm action). Not decided yet whether to build Dexcom-style alarms (urgent low,
-low, high, urgent low soon, rise/fall fast, snooze/repeat) into the plugin.
+Glucose alarms (added 2026-09-27, not yet tested on a phone): built into the plugin, see "Alarms" below.
 
 ## Goal
 
@@ -138,7 +136,8 @@ existing BYODA source (`DexcomPlugin`) already covers "use the Dexcom app", so t
 
 - Through `NotificationManager`: expires in 24 h, expires in 2 h, expired (12 h grace), session
   ended, sensor failed, connection refused, warmup finished.
-- Signal loss: use the existing AAPS missed-readings alarm, do not add a second one.
+- Signal loss: now one of the plugin's own alarms (see "Alarms"). If the AAPS missed-readings alarm
+  is also on, both go off; turn one of them off.
 
 ## Phase 6 - Verification
 
@@ -148,3 +147,34 @@ existing BYODA source (`DexcomPlugin`) already covers "use the Dexcom app", so t
   overnight reconnect in Doze, backfill after going out of range, sensor swap, app restart,
   calibration, Bluetooth off/on, phone reboot.
 - No install on devices unless asked. No commits unless asked.
+
+## Alarms
+
+Dexcom G7 style alarms inside the plugin (`cgm/dexcomg7/.../alarm`), set up under the plugin's
+settings (one section per alarm, next to "Alarms: general" - the settings screen draws only two
+levels). Sounds are the Dexcom app's own, in `res/raw/g7_*.m4a` (signal loss soft/medium/intense are
+the same files as the system alert, so they share them). They are NOT in git (Dexcom's files, public
+fork): run `cgm/dexcomg7/copy-dexcom-sounds.sh "<dexcom sounds folder>"` before building.
+
+- Alarms (priority order): urgent low (55, always on), sensor failed (always on), urgent low soon
+  (55 within 20 min from the sensor's trend rate), low (70), fall rate, high (250, delay first
+  alarm), rise rate, sensor ended, signal loss (after 20 min), brief sensor issue (after 20 min).
+- Per alarm: on/off (where Dexcom allows), level / rate / delay, repeat (snooze after acknowledge,
+  "never" = until the condition has been gone 15 min), sound (own soft/medium/intense/classic + 13
+  extra sounds), **first alarm vibrate only**, test sound.
+- Global: master switch, minimum alarm volume (raises STREAM_ALARM while playing, then puts it
+  back), sound until acknowledged (default off: plays once, like Dexcom).
+- Not acknowledged: comes back every 5 min with sound. Within a group (low / high / sensor) only
+  the most important active alarm goes off.
+- Sound on `USAGE_ALARM` like the AAPS alarm with override DND: plays on silent and vibrate. It is
+  still blocked by DND "total silence" or a DND setting that blocks alarms.
+- Wakeups by `AlarmManager` (exact when allowed) so reminders and signal loss work in Doze.
+- Acknowledge from the notification button, by swiping it away, or on the G7 status screen.
+- Logic is the pure `G7AlarmEngine` with JVM tests; `G7Alarms` does the Android side.
+- Watch (AAPS Wear app, added 2026-09-27): every raise also goes to the watch as `EventData.CgmAlarm`
+  (id = alarm type name, title, text, vibration seconds, urgent). The watch (`CgmAlarmWear`) shows its
+  own notification with Acknowledge (button or swipe) and vibrates as an alarm for that many seconds.
+  `CgmAlarmCancel` removes it; `CgmAlarmAcknowledge` from the watch, and the watch's existing snooze
+  (`SnoozeAlert`), acknowledge on the phone. Per alarm: watch vibration by day and at night
+  (off / 3 / 5 / 7 / 10 s); night hours are global (default 22:00-07:00). The phone notification is
+  `setLocalOnly` so it is not also copied to the watch.

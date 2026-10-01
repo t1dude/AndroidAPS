@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Names of this face's slots in the watch face editor. A literal displayName is ignored by the
+     editor on a customizable slot, so they have to be string resources - see the cwf face. English
+     only: this code-free APK carries no translations of its own. -->
+<resources>
+    <string name="slot_top">Top</string>
+    <string name="slot_middle">Middle</string>
+    <string name="slot_bottom">Bottom</string>
+</resources>

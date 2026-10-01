@@ -15,7 +15,7 @@ repositories {
  * Watch Face Push API (Wear OS 6+). Watch Face Push requires the face package to be
  * `<client app package>.watchfacepush.<face id>`, so every wear flavor gets its own face APKs.
  *
- * Two faces are built, one per `face` flavor, and the wear app embeds both. Watch Face Push gives
+ * Three faces are built, one per `face` flavor, and the wear app embeds them all. Watch Face Push gives
  * an app one slot, so only one of them is installed at a time: the wearer picks which one in the
  * phone's wear settings, and the wear app swaps the slot.
  *
@@ -26,6 +26,8 @@ repositories {
  * - `cwf`: the document that shows the Custom watchface as a full-screen image complication, so
  *   the wearer's own zip design reaches a watch whose firmware no longer runs code-based faces.
  *   Hand-written, see `_docs/CWF_WFF_Prompt.md`.
+ * - `circle`: the phone overview's glucose circle, drawn by the wear app as an image complication,
+ *   with three customizable complication slots beside it and a fixed clock above. Hand-written.
  *
  * Each face keeps its own template, preview pictures, `watch_face_info.xml` and strings under
  * `src/<face>/`; only the manifest and the shape declarations are shared in `src/main/`.
@@ -102,6 +104,10 @@ android {
             isDefault = true
             dimension = "face"
             applicationIdSuffix = ".watchfacepush.cwf"
+        }
+        create("circle") {
+            dimension = "face"
+            applicationIdSuffix = ".watchfacepush.circle"
         }
     }
     buildFeatures {

@@ -45,7 +45,7 @@ internal fun WearMainContentComplicationsFacePreview() {
                 isDeviceConnected = true,
                 hasCustomWatchface = true,
                 watchfaceName = "Analog G-Watch",
-                customWatchfaceSelected = false,
+                selectedWatchface = PushedWatchfaceId.WFS,
                 watchFacePushSupported = true,
                 installedWatchface = PushedWatchfaceId.CWF
             ),

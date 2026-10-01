@@ -13,4 +13,7 @@ object PushedWatchfaceId {
 
     /** The face that shows the wearer's own Custom watchface zip as a picture */
     const val CWF = "cwf"
+
+    /** The face built around the overview's glucose circle, with three AAPS complication slots beside it */
+    const val CIRCLE = "circle"
 }

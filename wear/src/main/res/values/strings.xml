@@ -326,6 +326,9 @@
     <string name="complication_bg_graph">BG Graph</string>
     <string name="complication_cwf_image">Custom Watchface</string>
     <string name="complication_cwf_ambient_bg">Custom Watchface ambient glucose</string>
+    <string name="complication_glucose_circle">Glucose circle</string>
+    <string name="complication_glucose_circle_ambient">Glucose circle ambient glucose</string>
+    <string name="glucose_circle_min_ago" comment="Age of the glucose reading inside the glucose circle, %1$d = minutes">%1$d min ago</string>
     <string name="complication_cwf_ambient_status">Custom Watchface ambient status</string>
     <string name="complication_cwf_ambient_cob_iob" comment="%1$s=carbs on board, unit included, for example 12g. %2$s=insulin on board, unit included, for example 1.19U. Shown on one line in ambient mode.">%1$s   %2$s</string>
     <string name="complication_cwf_lower">Custom Watchface background</string>

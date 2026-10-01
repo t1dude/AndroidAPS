@@ -15,6 +15,8 @@ import app.aaps.wear.complications.CobIconComplication
 import app.aaps.wear.complications.CobIobComplication
 import app.aaps.wear.complications.ComplicationTapActivity
 import app.aaps.wear.complications.CwfAmbientBgComplication
+import app.aaps.wear.complications.circle.GlucoseCircleAmbientComplication
+import app.aaps.wear.complications.circle.GlucoseCircleComplication
 import app.aaps.wear.complications.CwfAmbientStatusComplication
 import app.aaps.wear.complications.CwfImageComplication
 import app.aaps.wear.complications.IobDetailedComplication
@@ -130,6 +132,18 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(BgGraphComplication::class)
     fun bindBgGraphComplication(injector: MembersInjector<BgGraphComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(GlucoseCircleComplication::class)
+    fun bindGlucoseCircleComplication(injector: MembersInjector<GlucoseCircleComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(GlucoseCircleAmbientComplication::class)
+    fun bindGlucoseCircleAmbientComplication(injector: MembersInjector<GlucoseCircleAmbientComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

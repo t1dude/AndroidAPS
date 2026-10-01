@@ -185,7 +185,8 @@ enum class StringKey(
         preferenceType = PreferenceType.LIST,
         entriesRefs = mapOf(
             PushedWatchfaceId.WFS to KeysStrings.wear_pushed_watchface_wfs,
-            PushedWatchfaceId.CWF to KeysStrings.wear_pushed_watchface_cwf
+            PushedWatchfaceId.CWF to KeysStrings.wear_pushed_watchface_cwf,
+            PushedWatchfaceId.CIRCLE to KeysStrings.wear_pushed_watchface_circle
         )
     ),
 

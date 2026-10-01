@@ -30,6 +30,8 @@ import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.wear.R
 import app.aaps.wear.complications.BgGraphComplication
 import app.aaps.wear.complications.CwfAmbientBgComplication
+import app.aaps.wear.complications.circle.GlucoseCircleAmbientComplication
+import app.aaps.wear.complications.circle.GlucoseCircleComplication
 import app.aaps.wear.complications.CwfAmbientStatusComplication
 import app.aaps.wear.complications.BrCobIobComplication
 import app.aaps.wear.complications.BrCobIobComplicationExt1
@@ -168,11 +170,11 @@ class DataHandlerWear(
         }
         onEvent<EventData.OpenLoopRequest> { handleOpenLoopRequest(it) }
         onEvent<EventData.OpenSettings> {
-            // The Display screen holds the settings of the code-based faces. With the complications
-            // face installed through Watch Face Push nothing there is the wearer's, so the phone's
+            // The Display screen holds the settings of the code-based faces. With a built-in face
+            // installed through Watch Face Push nothing there is the wearer's, so the phone's
             // button opens the main settings menu instead, from which every screen is reachable
             val target =
-                if (watchFacePushHelper.isSupported() && watchFacePushHelper.selectedFace == PushedFace.WFS) PreferenceMenuActivity::class.java
+                if (watchFacePushHelper.isSupported() && watchFacePushHelper.selectedFace != PushedFace.CWF) PreferenceMenuActivity::class.java
                 else WatchfaceConfigurationActivity::class.java
             context.startActivity(Intent(context, target).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         }
@@ -440,6 +442,9 @@ class DataHandlerWear(
             // behind the value drawn in the face itself.
             CwfAmbientBgComplication::class.java,
             CwfAmbientStatusComplication::class.java,
+            // The glucose circle face: its picture and its always-on readout
+            GlucoseCircleComplication::class.java,
+            GlucoseCircleAmbientComplication::class.java,
             // Long status complications (show detailed glucose + status info)
             LongStatusComplication::class.java,
             LongStatusFlippedComplication::class.java,

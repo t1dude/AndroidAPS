@@ -86,6 +86,7 @@ class MainMenuActivity : MenuListActivity() {
                 val icon = when (watchFacePushHelper.selectedFace) {
                     PushedFace.WFS -> R.drawable.watchface_wfs
                     PushedFace.CWF -> R.drawable.watchface_custom
+                    PushedFace.CIRCLE -> R.drawable.watchface_circle
                 }
                 add(MenuItem(icon, getString(if (installing) R.string.menu_installing_watchface else R.string.menu_install_watchface)))
             }

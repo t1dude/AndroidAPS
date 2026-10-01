@@ -57,11 +57,8 @@ data class WearUiState(
     val hasCustomWatchface: Boolean = false,
     val watchfaceName: String = "",
     val watchfaceImage: ImageBitmap? = null,
-    /**
-     * Whether the phone's choice of pushed face is the one that shows the custom watchface. When it
-     * is not, a loaded zip reaches the watch but stays invisible there until the choice changes.
-     */
-    val customWatchfaceSelected: Boolean = true,
+    /** The phone's choice of pushed face, as a `PushedWatchfaceId` value */
+    val selectedWatchface: String = PushedWatchfaceId.CWF,
     /** Whether the connected watch reported Watch Face Push (Wear OS 6+); the face choice shows only then */
     val watchFacePushSupported: Boolean = false,
     /** The face the watch reported holding, as a `PushedWatchfaceId` value, or null when unknown or none */
@@ -72,7 +69,14 @@ data class WearUiState(
     val cwfInfosState: CwfInfosState? = null,
     val showImportList: Boolean = false,
     val importItems: List<CwfImportItemState> = emptyList()
-)
+) {
+
+    /**
+     * Whether the chosen pushed face is the one that shows the custom watchface. When it is not, a
+     * loaded zip reaches the watch but stays invisible there until the choice changes.
+     */
+    val customWatchfaceSelected: Boolean get() = selectedWatchface == PushedWatchfaceId.CWF
+}
 
 @Immutable
 data class CwfInfosState(
@@ -154,7 +158,7 @@ class WearViewModel(
         }
         viewModelScope.launch {
             preferences.observe(StringKey.WearPushedWatchface).collect { face ->
-                _uiState.update { it.copy(customWatchfaceSelected = face == PushedWatchfaceId.CWF) }
+                _uiState.update { it.copy(selectedWatchface = face) }
             }
         }
         viewModelScope.launch {

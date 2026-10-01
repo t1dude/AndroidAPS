@@ -218,7 +218,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <!-- Same reading as SgvComplication, but a tap opens the menu. Used only by the ambient
@@ -242,7 +242,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <service
@@ -263,7 +263,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <!-- Publishes the whole Custom watch face as a full-screen image, for Watch Face Format
@@ -362,7 +362,53 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
+        </service>
+
+        <!-- The glucose circle face's picture: the overview's BG circle drawn as an image, because
+             Watch Face Format cannot draw it. Only that face uses it, so it is not offered to others. -->
+        <service
+            android:name=".complications.circle.GlucoseCircleComplication"
+            android:exported="true"
+            android:icon="@drawable/ic_sgv"
+            android:label="@string/complication_glucose_circle"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SMALL_IMAGE" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="60" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="${applicationId}.watchfacepush.circle" />
+        </service>
+
+        <!-- The same reading as text, drawn by the runtime inside the circle while the watch dozes -
+             see GlucoseCircleAmbientComplication. -->
+        <service
+            android:name=".complications.circle.GlucoseCircleAmbientComplication"
+            android:exported="true"
+            android:icon="@drawable/ic_sgv"
+            android:label="@string/complication_glucose_circle_ambient"
+            android:permission="com.google.android.wearable.permission.BIND_COMPLICATION_PROVIDER">
+            <intent-filter>
+                <action android:name="android.support.wearable.complications.ACTION_COMPLICATION_UPDATE_REQUEST" />
+            </intent-filter>
+
+            <meta-data
+                android:name="android.support.wearable.complications.SUPPORTED_TYPES"
+                android:value="SHORT_TEXT" />
+            <meta-data
+                android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
+                android:value="300" />
+            <meta-data
+                android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
+                android:value="${applicationId}.watchfacepush.circle" />
         </service>
 
         <service
@@ -491,7 +537,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <service
@@ -584,7 +630,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <service
@@ -617,7 +663,7 @@
 
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
             <meta-data
                 android:name="android.support.wearable.complications.SUPPORTED_TYPES"
                 android:value="SHORT_TEXT" />
@@ -662,7 +708,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <service
@@ -683,7 +729,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <service

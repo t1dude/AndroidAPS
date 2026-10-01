@@ -208,12 +208,12 @@ internal fun WearMainContent(
     // Confirmed first because the watch replaces its installed face at once.
     var pendingWatchface by remember { mutableStateOf<String?>(null) }
     pendingWatchface?.let { face ->
-        val current = if (uiState.customWatchfaceSelected) PushedWatchfaceId.CWF else PushedWatchfaceId.WFS
-        // Leaving the complications face loses what was edited on it in the watch face editor:
-        // the runtime drops a face's user configuration when a face of another package name takes
-        // the slot. Leaving the custom face loses nothing worth a warning, so only one way says so.
+        val current = uiState.selectedWatchface
+        // Leaving a face with complication slots loses what was edited on it in the watch face
+        // editor: the runtime drops a face's user configuration when a face of another package name
+        // takes the slot. Leaving the custom face loses nothing worth a warning, so only it is quiet.
         val message =
-            if (current == PushedWatchfaceId.WFS) SyncStrings.wear_pushed_watchface_confirm_message_from_complications
+            if (current != PushedWatchfaceId.CWF) SyncStrings.wear_pushed_watchface_confirm_message_from_complications
             else SyncStrings.wear_pushed_watchface_confirm_message
         OkCancelDialog(
             title = stringResource(SyncStrings.wear_pushed_watchface_confirm_title),
@@ -287,15 +287,15 @@ internal fun WearMainContent(
                         modifier = Modifier.padding(horizontal = AapsSpacing.small)
                     )
 
-                    // Watch Face Push gives the app one slot, so this is a choice between the two
-                    // embedded faces, not two switches. The tap asks first, see pendingWatchface.
+                    // Watch Face Push gives the app one slot, so this is a choice between the
+                    // embedded faces, not a set of switches. The tap asks first, see pendingWatchface.
                     // While the watch still holds the other face - the seconds an install takes,
                     // or longer after a reinstall until the preferences reach it - the chosen row
                     // says so, quietly: it is progress, not a fault.
-                    val selectedId = if (uiState.customWatchfaceSelected) PushedWatchfaceId.CWF else PushedWatchfaceId.WFS
+                    val selectedId = uiState.selectedWatchface
                     val installing = uiState.installedWatchface != null && uiState.installedWatchface != selectedId
                     Column(modifier = Modifier.selectableGroup()) {
-                        listOf(PushedWatchfaceId.CWF, PushedWatchfaceId.WFS).forEach { face ->
+                        listOf(PushedWatchfaceId.CWF, PushedWatchfaceId.WFS, PushedWatchfaceId.CIRCLE).forEach { face ->
                             val selected = face == selectedId
                             WatchfaceChoiceRow(
                                 label = pushedWatchfaceLabel(face),
@@ -306,13 +306,18 @@ internal fun WearMainContent(
                         }
                     }
 
-                    // What the wrist shows with the complications face chosen. The custom face
-                    // needs no picture here: its own preview is in its own card below.
-                    if (!uiState.customWatchfaceSelected) {
+                    // What the wrist shows with a built-in face chosen. The custom face needs no
+                    // picture here: its own preview is in its own card below.
+                    val preview = when (selectedId) {
+                        PushedWatchfaceId.WFS    -> R.drawable.wfs_watchface_preview
+                        PushedWatchfaceId.CIRCLE -> R.drawable.circle_watchface_preview
+                        else                     -> null
+                    }
+                    if (preview != null) {
                         Spacer(modifier = Modifier.height(AapsSpacing.small))
                         Image(
-                            painter = painterResource(R.drawable.wfs_watchface_preview),
-                            contentDescription = pushedWatchfaceLabel(PushedWatchfaceId.WFS),
+                            painter = painterResource(preview),
+                            contentDescription = pushedWatchfaceLabel(selectedId),
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .padding(horizontal = AapsSpacing.extraLarge),
@@ -378,7 +383,13 @@ internal fun WearMainContent(
 /** The label of an embedded face, from the same strings the key's list entries use */
 @Composable
 private fun pushedWatchfaceLabel(face: String): String =
-    stringResource(if (face == PushedWatchfaceId.CWF) KeysStrings.wear_pushed_watchface_cwf else KeysStrings.wear_pushed_watchface_wfs)
+    stringResource(
+        when (face) {
+            PushedWatchfaceId.CWF    -> KeysStrings.wear_pushed_watchface_cwf
+            PushedWatchfaceId.CIRCLE -> KeysStrings.wear_pushed_watchface_circle
+            else                     -> KeysStrings.wear_pushed_watchface_wfs
+        }
+    )
 
 /** One radio row; [hint] is a quiet note after the label, for a state that will pass by itself */
 @Composable

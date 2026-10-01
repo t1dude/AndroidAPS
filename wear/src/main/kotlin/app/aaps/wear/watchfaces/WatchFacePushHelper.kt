@@ -37,7 +37,10 @@ enum class PushedFace(val id: String) {
     WFS(PushedWatchfaceId.WFS),
 
     /** The face that shows the wearer's own Custom watchface zip as a picture */
-    CWF(PushedWatchfaceId.CWF);
+    CWF(PushedWatchfaceId.CWF),
+
+    /** The overview's glucose circle with three AAPS complication slots beside it */
+    CIRCLE(PushedWatchfaceId.CIRCLE);
 
     val assetApk: String get() = "watchfacepush/$id.apk"
     val assetToken: String get() = "watchfacepush/${id}_token.txt"
@@ -55,10 +58,10 @@ enum class PushedFace(val id: String) {
  * available on Wear OS 6+ (API 36) — the watches that no longer support the code-based AAPS
  * watchfaces and therefore have no other way to get an AAPS face.
  *
- * Two faces are embedded (see [PushedFace]) but Watch Face Push gives an app **one** slot, measured
+ * Several faces are embedded (see [PushedFace]) but Watch Face Push gives an app **one** slot, measured
  * as `slots used=1 remaining=0` on a Galaxy Watch 4. So the wearer chooses one on the phone, the
  * choice arrives with the preferences and is kept in [selectedFace], and this helper makes sure the
- * slot holds that face: a change of choice updates the slot with the other APK, which the API allows
+ * slot holds that face: a change of choice updates the slot with another APK, which the API allows
  * ("a completely different watch face"), at the price of resetting that face's own editor settings.
  *
  * The face APKs and their validation tokens are generated at build time (see `EmbedWatchFaceTask`

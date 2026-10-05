@@ -27,6 +27,7 @@ import app.aaps.pump.omnipod.common.bledriver.pod.definition.AlertType
 import app.aaps.pump.omnipod.common.bledriver.pod.definition.DeliveryStatus
 import app.aaps.pump.omnipod.common.bledriver.pod.definition.PodStatus
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.O5PodStateManager
+import app.aaps.pump.omnipod.omnipod5.history.O5History
 import app.aaps.pump.omnipod.common.bledriver.pod.command.StopDeliveryCommand
 import app.aaps.pump.omnipod.common.bledriver.pod.command.SuspendDeliveryCommand
 import app.aaps.pump.omnipod.common.bledriver.pod.command.ProgramBasalCommand
@@ -83,6 +84,7 @@ class O5PumpPluginTest : TestBaseWithProfile() {
     @Mock lateinit var bolusProgressData: BolusProgressData
     @Mock lateinit var protectionCheck: ProtectionCheck
     @Mock lateinit var blePreCheck: BlePreCheck
+    @Mock lateinit var history: O5History
 
     private lateinit var plugin: O5PumpPlugin
 

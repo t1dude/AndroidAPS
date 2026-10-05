@@ -81,7 +81,7 @@ class O5PumpPluginTest : TestBaseWithProfile() {
     fun setup() {
         plugin = O5PumpPlugin(
             aapsLogger, rh, preferences, commandQueue, bleManager, podStateManager, history, pumpSync,
-            notificationManager, pumpEnactResultProvider, bolusProgressData, protectionCheck, blePreCheck, config
+            notificationManager, pumpEnactResultProvider, bolusProgressData, protectionCheck, blePreCheck
         )
         whenever(rh.gs(R.string.omnipod_5_error_not_enough_insulin)).thenReturn("Not enough insulin")
         whenever(rh.gs(R.string.omnipod_5_error_bolus_already_in_progress)).thenReturn("Bolus already in progress")

@@ -83,7 +83,6 @@ class DexcomG7DirectPlugin(
         .mainType(PluginType.BGSOURCE)
         .icon(IcDexcomG7)
         .pluginName(TextRef.AndroidRes(R.string.dexcom_g7_direct))
-        .shortName(TextRef.AndroidRes(R.string.dexcom_g7_direct_short))
         .preferencesVisibleInSimpleMode(false)
         .description(TextRef.AndroidRes(R.string.description_dexcom_g7_direct)),
     ownPreferences = G7StringNonKey.entries + G7AlarmKeys.all,

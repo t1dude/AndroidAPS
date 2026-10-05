@@ -18,8 +18,6 @@ import app.aaps.core.data.pump.defs.ManufacturerType
 import app.aaps.core.data.pump.defs.PumpDescription
 import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.data.time.T
-import app.aaps.core.interfaces.configuration.Config
-import app.aaps.core.interfaces.configuration.ExternalOptions
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.notifications.AlarmSound
@@ -172,8 +170,7 @@ class O5PumpPlugin @Inject constructor(
     private val pumpEnactResultProvider: () -> PumpEnactResult,
     private val bolusProgressData: BolusProgressData,
     private val protectionCheck: ProtectionCheck,
-    private val blePreCheck: BlePreCheck,
-    private val config: Config
+    private val blePreCheck: BlePreCheck
 ) : PumpPluginBase(
     pluginDescription = PluginDescription()
         .mainType(PluginType.PUMP)
@@ -187,7 +184,6 @@ class O5PumpPlugin @Inject constructor(
         }
         .icon(IcPluginOmnipod)
         .pluginName(TextRef.AndroidRes(R.string.omnipod_5_name))
-        .shortName(TextRef.AndroidRes(R.string.omnipod_5_name_short))
         .description(TextRef.AndroidRes(R.string.omnipod_5_pump_description)),
     ownPreferences = OmnipodBooleanPreferenceKey.entries + OmnipodIntPreferenceKey.entries +
         DashBooleanPreferenceKey.entries + O5IntentKey.entries,
@@ -1280,11 +1276,8 @@ class O5PumpPlugin @Inject constructor(
 
     /** Mirrors OmnipodDashPodStateManagerImpl.needsBasalCorrection() exactly (thresholds,
      *  cooldown, drift-reset/zero-TBR safety checks), adapted to O5's flat temp-basal
-     *  fields in place of Dash's TempBasal object. Opt-in via the same
-     *  [ExternalOptions.ENABLE_OMNIPOD_DRIFT_COMPENSATION] semaphore file Dash uses. */
+     *  fields in place of Dash's TempBasal object. Always on, as on Dash. */
     private fun needsBasalCorrection(): Boolean {
-        if (!config.isEnabled(ExternalOptions.ENABLE_OMNIPOD_DRIFT_COMPENSATION)) return false
-
         val correctionThreshold = -PodConstants.POD_PULSE_BOLUS_UNITS / 2
 
         if (podStateManager.activationProgress != ActivationProgress.COMPLETED) return false

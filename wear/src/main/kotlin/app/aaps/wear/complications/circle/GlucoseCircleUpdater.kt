@@ -23,19 +23,13 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 /**
- * Keeps the "min ago" text in the glucose circle picture up to date.
+ * Asks for a new circle picture each time the age in it ("2 min ago") changes. The system's own
+ * update period is too slow for that.
  *
- * New data already reaches the circle through `DataHandlerWear`, like every other complication. What
- * nothing else does is redraw it as the reading ages: `UPDATE_PERIOD_SECONDS` was measured being
- * honoured only every 1.5 to 6 minutes (see [CwfComplicationUpdater]), so the age would lag by
- * minutes. A pushed update is delivered at once, so this asks for one exactly when the shown minute
- * count changes - once a minute, on the reading's own grid rather than the clock's.
+ * Also asks for a new picture when the watch wakes, and for new ambient text on every mode change,
+ * because the tap action of that text depends on the mode.
  *
- * Also refreshes the picture when the watch wakes, because it may be minutes old by then, and the
- * always-on readout on every mode change, because its tap action depends on the mode.
- *
- * Only while a face shows the circle, judged the same way as the Custom watchface: a request within
- * the last ten minutes. Without one nothing is drawn or asked for.
+ * Does nothing unless a face asked for the picture in the last ten minutes.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -47,13 +41,13 @@ class GlucoseCircleUpdater(
 
     companion object {
 
-        /** How often an idle loop looks whether a face has asked */
+        /** Wait between checks while no face shows the circle */
         private const val IDLE_POLL_MS = 5_000L
 
-        /** Just past the minute boundary, so the redraw lands on the new count and not before it */
+        /** Added to the wait, so the picture is drawn just after the age changes */
         private const val BOUNDARY_SLACK_MS = 200L
 
-        /** Longest single wait, so new data or a clock change is picked up within a minute anyway */
+        /** Longest wait */
         private const val MAX_WAIT_MS = 60_000L
     }
 
@@ -81,12 +75,11 @@ class GlucoseCircleUpdater(
             wasAmbient = dozing
             if (!hasDemand()) return
             aapsLogger.debug(LTag.WEAR, "GlucoseCircleUpdater: ambient=$dozing")
-            // The picture only on waking: it is hidden while dozing. On a Galaxy Watch the picture
-            // sometimes stayed visible in ambient. A new picture that lands just after the watch
-            // dozed is the likely cause.
+            // Not when the watch dims: the picture is hidden then, and on a Galaxy Watch a new picture
+            // that arrived just after dimming stayed visible in ambient mode.
             if (!dozing) circle.requestUpdateAll()
             ambient.requestUpdateAll()
-            // The tick loop may be asleep on a wait computed before the watch froze
+            // The current wait was computed before the mode changed
             startTicks()
         }
     }
@@ -105,7 +98,7 @@ class GlucoseCircleUpdater(
                     if (timeStamp == 0L) MAX_WAIT_MS
                     else (GlucoseCircleComplication.nextAgeChangeMs(timeStamp, now) - now + BOUNDARY_SLACK_MS).coerceIn(0, MAX_WAIT_MS)
                 delay(wait)
-                // Hidden while dozing, and our process is frozen then anyway
+                // Hidden in ambient mode
                 if (!CwfFaceComplication.isAmbient(context)) circle.requestUpdateAll()
             }
         }
@@ -115,7 +108,7 @@ class GlucoseCircleUpdater(
         context.getSystemService(DisplayManager::class.java)
             ?.registerDisplayListener(displayListener, Handler(Looper.getMainLooper()))
         startTicks()
-        // One knock, in case the face is already showing: its answer is the demand the loop waits for
+        // If the face is already showing, its request starts the loop
         circle.requestUpdateAll()
     }
 }

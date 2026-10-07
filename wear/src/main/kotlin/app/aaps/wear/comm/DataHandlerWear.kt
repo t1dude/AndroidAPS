@@ -443,7 +443,7 @@ class DataHandlerWear(
             // behind the value drawn in the face itself.
             CwfAmbientBgComplication::class.java,
             CwfAmbientStatusComplication::class.java,
-            // The glucose circle face: its picture and its always-on readout
+            // Glucose circle face
             GlucoseCircleComplication::class.java,
             GlucoseCircleAmbientComplication::class.java,
             // Long status complications (show detailed glucose + status info)

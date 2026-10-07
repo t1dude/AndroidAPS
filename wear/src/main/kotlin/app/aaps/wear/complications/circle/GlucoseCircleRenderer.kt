@@ -15,7 +15,7 @@ import kotlin.math.PI
 import kotlin.math.cos
 import kotlin.math.sin
 
-/** Input for [GlucoseCircleRenderer]. Texts arrive formatted in the user's units from the phone. */
+/** Input for [GlucoseCircleRenderer]. The texts are formatted by the phone. */
 data class GlucoseCircleInput(
     val bgText: String,
     @ColorInt val bgColor: Int,
@@ -26,12 +26,7 @@ data class GlucoseCircleInput(
     val timeAgoText: String
 )
 
-/**
- * Where the trend arc sits on the ring and how many arrow heads it carries.
- *
- * The same five positions as the phone's overview circle (`BgInfoSection`), so the watch reads the
- * same as the phone at a glance: up at the top, flat at the right, down at the bottom.
- */
+/** Where the trend arc sits on the ring and how many arrow heads it has, as on the phone (`BgInfoSection`) */
 internal data class ArcIndicator(val centerAngle: Float, val sweepAngle: Float, val triangleCount: Int)
 
 internal fun TrendArrow.toArcIndicator(): ArcIndicator? {
@@ -51,11 +46,8 @@ internal fun TrendArrow.toArcIndicator(): ArcIndicator? {
 }
 
 /**
- * The trend of a reading as the phone sent it.
- *
- * The watch only receives [TrendArrow.symbol], which is a wire format rather than a display string,
- * and it is ambiguous in one place: both triple arrows travel as `"X"`. The delta tells them apart;
- * without one there is no honest direction to draw, so no arc is drawn.
+ * The trend of a reading as the phone sent it. Both triple arrows arrive as `"X"`, so the delta
+ * decides the direction. Without a delta no arc is drawn.
  */
 internal fun EventData.SingleBg.trendArrow(): TrendArrow =
     if (slopeArrow == TrendArrow.TRIPLE_UP.symbol)
@@ -67,13 +59,8 @@ internal fun EventData.SingleBg.trendArrow(): TrendArrow =
     else TrendArrow.entries.firstOrNull { it.symbol == slopeArrow } ?: TrendArrow.NONE
 
 /**
- * Draws the phone overview's BG circle - ring in the BG colour, trend arc with arrow heads, and
- * delta, value and age stacked in the middle - into a square bitmap for the glucose circle watch face.
- *
- * Ported from the home screen widget's `GlucoseCircleBitmapRenderer`, which lives in `:ui` where the
- * wear app cannot reach it. All sizes scale with the bitmap, in the overview's proportions.
- *
- * The bitmap has no background: the face behind the slot supplies it.
+ * Draws the overview's BG circle into a square bitmap with a transparent background. Ported from the
+ * home screen widget's `GlucoseCircleBitmapRenderer` in `:ui`, which the wear app cannot use.
  */
 object GlucoseCircleRenderer {
 

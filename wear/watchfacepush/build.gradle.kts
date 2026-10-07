@@ -27,7 +27,7 @@ repositories {
  *   the wearer's own zip design reaches a watch whose firmware no longer runs code-based faces.
  *   Hand-written, see `_docs/CWF_WFF_Prompt.md`.
  * - `circle`: the phone overview's glucose circle, drawn by the wear app as an image complication,
- *   with three customizable complication slots beside it and a fixed clock above. Hand-written.
+ *   with two dials and four edge slots. Written by `tools/circle`, see the README there.
  *
  * Each face keeps its own template, preview pictures, `watch_face_info.xml` and strings under
  * `src/<face>/`; only the manifest and the shape declarations are shared in `src/main/`.

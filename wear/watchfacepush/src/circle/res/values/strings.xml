@@ -1,7 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Names of this face's slots in the watch face editor. A literal displayName is ignored by the
-     editor on a customizable slot, so they have to be string resources - see the cwf face. English
-     only: this code-free APK carries no translations of its own. -->
+<!-- Slot names in the watch face editor. The editor ignores a literal displayName on a
+     customizable slot, so they must be string resources. -->
 <resources>
     <string name="dial_left">Left dial</string>
     <string name="dial_right">Right dial</string>

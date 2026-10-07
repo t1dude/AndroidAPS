@@ -12,11 +12,8 @@ import app.aaps.core.interfaces.logging.LTag
 import app.aaps.wear.R
 
 /**
- * Insulin left in the pump, as the phone sends it.
- *
- * The phone sends the units, not the pump's size, so the range is a guess: 200 U, which most pumps
- * and pods hold, or 300 U when more than 200 U is left. With no reading (no profile on the phone, or
- * an empty value) the text is "--" and the range is empty.
+ * Insulin left in the pump. The phone does not send the pump's size, so the range is 200 U, or 300 U
+ * when more than 200 U is left. Without a value the text is "--".
  */
 class ReservoirComplication : ModernBaseComplicationProviderService() {
 

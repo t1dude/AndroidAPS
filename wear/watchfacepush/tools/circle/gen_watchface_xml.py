@@ -1,11 +1,4 @@
-"""Writes the glucose circle face's watchface.xml from the layout below.
-
-Run from the repository root:
-    python3 wear/watchfacepush/tools/circle/gen_watchface_xml.py wear/watchfacepush/src/circle/template/watchface.xml
-
-Edit the layout here, not in watchface.xml. If the circle moves, change FaceArt.java to match and
-draw the background again (see README.md).
-"""
+"""Writes the glucose circle face's watchface.xml. See README.md."""
 import math
 import sys
 
@@ -36,7 +29,7 @@ EDGES = [
 DIAL = 108
 DIAL_LEFT = (92, 280)
 DIAL_RIGHT = (358, 280)
-# The dial's contents were laid out for 84 px; this scales them to DIAL.
+# The dial contents were laid out for 84 px; DK scales them.
 DK = DIAL / 84
 DIALS = [
     (2, "DialLeft", "dial_left", DIAL_LEFT[0] - DIAL // 2, DIAL_LEFT[1] - DIAL // 2,
@@ -48,8 +41,7 @@ DIALS = [
 
 RANGE = ("clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / "
          "([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)")
-# Goal progress (Watch Face Format 2): steps against the daily goal. The value may pass the target;
-# the arc stops at full.
+# Goal progress needs Watch Face Format 2. The value may pass the target; the arc stops at full.
 GOAL = "clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)"
 
 
@@ -79,8 +71,7 @@ def text_part(x, y, w, h, size, expression, color="#ffffffff", weight="NORMAL", 
 
 def edge_slot(slot_id, name, display, a0, a1, bottom, policy):
     span = a1 - a0
-    # Icon first, then the label, both read from the left: on the top half that is the arc's start,
-    # on the bottom half its end. The label starts after the icon whether there is one or not.
+    # Icon, then label, from the left end: the arc's start on the top half, its end on the bottom.
     icon = 18
     if bottom:
         ix, iy = polar(187, a1 - 3.5)
@@ -153,7 +144,7 @@ def edge_slot(slot_id, name, display, a0, a1, bottom, policy):
 
 
 def k(n):
-    """A size from the 84 px dial layout, scaled to DIAL and rounded, as Watch Face Format wants."""
+    """A size from the 84 px dial layout, scaled and rounded (Watch Face Format wants whole numbers)."""
     return round(n * DK)
 
 
@@ -245,33 +236,14 @@ ring_xy = SLOT / 2 - ring_d / 2
 head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
     <Metadata key="CLOCK_TYPE" value="DIGITAL" />
 
-    <!-- The glucose circle face.
+    <!-- The glucose circle face. Written by wear/watchfacepush/tools/circle/gen_watchface_xml.py:
+         change the layout there, see the README.
 
-         The phone overview's BG circle sits large at the top, the time and date below it, one dial on
-         each side, and four optional slots along the edge of the screen: an arc that fills for a value
-         with a range (watch battery, reservoir, rig battery) or a goal (steps), or a curved label for
-         plain text. Goal progress needs Watch Face Format 2, set in src/circle/AndroidManifest.xml.
+         The circle is a picture drawn by the wear app (GlucoseCircleComplication). In ambient mode it
+         is hidden and a grey ring with the reading as text is shown instead.
 
-         Watch Face Format cannot draw an arc that follows glucose data, so the circle is a picture
-         drawn by the wear app (GlucoseCircleComplication) in a slot the wearer cannot change. Its age
-         line only moves when the picture is redrawn; GlucoseCircleUpdater asks for that each time the
-         minute count changes.
-
-         The background (gradient, lines from the circle's centre, minute ticks) is a picture too:
-         res/drawable-nodpi/background.png. It is drawn for this layout; move the circle and it has to
-         be drawn again.
-
-         This file is written by wear/watchfacepush/tools/circle/gen_watchface_xml.py. Change the
-         layout there and run it again; see the README next to it.
-
-         Always-on: our process is frozen while the watch dozes (see the cwf face), so the picture
-         would sit there with an age that has stopped. It is hidden then, and the runtime draws a grey
-         ring outline and the reading from a text complication whose age it keeps counting itself.
-         Everything else except the time is hidden too.
-
-         Angles are in degrees, clockwise from 12 o'clock. Children of a ComplicationSlot are
-         positioned relative to the slot; the edge slots cover the whole face so their arcs can use
-         the face's centre, and a BoundingArc keeps their taps on the edge. -->
+         Angles are in degrees, clockwise from 12 o'clock. The edge slots cover the whole face, so
+         their arcs can use the face's centre. -->
 
     <Scene backgroundColor="#ff000000">
 
@@ -280,8 +252,7 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             <Image resource="background" />
         </PartImage>
 
-        <!-- Always-on ring outline, where the picture's ring is: the picture is {SLOT} px wide and
-             drawn at 150 overview dp, so the ring's centre line has a radius of {f(106 * K)} px. -->
+        <!-- Ambient ring, at the radius of the ring in the picture -->
         <PartDraw x="{SX}" y="{SY}" width="{SLOT}" height="{SLOT}" alpha="0">
             <Variant mode="AMBIENT" target="alpha" value="255" />
             <Ellipse x="{f(ring_xy)}" y="{f(ring_xy)}" width="{f(ring_d)}" height="{f(ring_d)}">
@@ -313,9 +284,7 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
-        <!-- The always-on reading inside the ring. Invisible while awake, but it still takes the
-             taps over the circle then, so its provider opens the BG graph too - and nothing while
-             dozing, so the first tap wakes the watch. -->
+        <!-- The ambient reading. Invisible while awake, but it gets the taps on the circle. -->
         <ComplicationSlot
             name="GlucoseCircleAmbient"
             slotId="1"
@@ -338,8 +307,7 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             <Complication type="EMPTY" />
         </ComplicationSlot>
 
-        <!-- Fixed clock under the circle, awake and always-on. hourFormat follows the device's 12/24
-             hour setting. -->
+        <!-- Time, also in ambient mode -->
         <DigitalClock x="75" y="310" width="300" height="70">
             <TimeText align="CENTER" format="hh:mm" hourFormat="SYNC_TO_DEVICE"
                 x="0" y="0" width="300" height="70">
@@ -347,7 +315,7 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             </TimeText>
         </DigitalClock>
 
-        <!-- AM or PM, only on a 12-hour device: TimeText cannot draw it (see the cwf face). -->
+        <!-- AM or PM on a 12-hour device: TimeText cannot draw it -->
         <Condition>
             <Expressions>
                 <Expression name="twelveHourClock">[IS_24_HOUR_MODE] == 0</Expression>
@@ -364,7 +332,7 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             </Compare>
         </Condition>
 
-        <!-- Day, date and month under the time. Hidden while dozing. -->
+        <!-- Date -->
         <PartText x="115" y="377" width="220" height="26">
             <Variant mode="AMBIENT" target="alpha" value="0" />
             <Text align="CENTER" ellipsis="TRUE">
@@ -374,16 +342,14 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
             </Text>
         </PartText>
 
-        <!-- The two dials beside the time: empty on the left (weather fits well), insulin on board on
-             the right, whose tap opens the bolus screen. A value with a range fills the ring. -->
+        <!-- Dials: empty on the left, IOB on the right -->
 '''
 
 parts = [head]
 for d in DIALS:
     parts.append(dial_slot(*d))
     parts.append("")
-parts.append('''        <!-- The edge: watch battery, steps, reservoir and rig battery by default. An icon, when the
-             complication has one, sits at the left end of the label, which reads from there. -->
+parts.append('''        <!-- Edge slots: watch battery, steps, reservoir and rig battery by default -->
 ''')
 for e in EDGES:
     parts.append(edge_slot(*e))

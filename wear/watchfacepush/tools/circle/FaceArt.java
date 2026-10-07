@@ -75,16 +75,16 @@ public class FaceArt {
         Shape face = new Ellipse2D.Double(0, 0, S, S);
         g.setPaint(new RadialGradientPaint(
             new Point2D.Double(C, 190), 285f,
-            new float[] { 0f, 0.68f, 1f },
-            new Color[] { new Color(0x1c, 0x22, 0x32), new Color(0x0c, 0x0f, 0x17), new Color(0x05, 0x06, 0x0a) },
+            new float[] { 0f, 0.6f, 1f },
+            new Color[] { new Color(0x33, 0x40, 0x63), new Color(0x17, 0x1d, 0x2e), new Color(0x08, 0x0a, 0x10) },
             MultipleGradientPaint.CycleMethod.NO_CYCLE));
         g.fill(face);
 
         // Sunburst from the glucose circle's centre, kept inside the edge band.
         Shape oldClip = g.getClip();
         g.setClip(new Ellipse2D.Double(C - 199, C - 199, 398, 398));
-        g.setColor(new Color(255, 255, 255, 17));
-        g.setStroke(new BasicStroke(1f));
+        g.setColor(new Color(255, 255, 255, 34));
+        g.setStroke(new BasicStroke(1.2f));
         double start = RING_R + RING_W / 2 + 16 * K;
         for (int a = 0; a < 360; a += 3) {
             Point2D.Double p0 = polar(GX, GY, start, a);

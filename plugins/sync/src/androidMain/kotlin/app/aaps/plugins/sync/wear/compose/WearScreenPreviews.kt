@@ -35,11 +35,11 @@ internal fun WearMainContentPreview() {
 @Preview(showBackground = true)
 @Preview(showBackground = true, uiMode = Configuration.UI_MODE_NIGHT_YES)
 @Composable
-internal fun WearMainContentComplicationsFacePreview() {
+internal fun WearMainContentDashboardFacePreview() {
     MaterialTheme {
         WearMainContent(
-            // The complications face chosen while the watch still holds the custom one: the chosen
-            // row carries the "Installing…" note, and its picture shows under the choice
+            // The Dashboard face chosen while the watch still holds the custom one: its card is
+            // centred and outlined and carries the "Installing…" note; the zip card is hidden
             uiState = WearUiState(
                 connectedDevice = "Galaxy Watch 8 (c3d4)",
                 isDeviceConnected = true,

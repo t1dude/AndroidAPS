@@ -7,12 +7,18 @@ import app.aaps.plugins.sync.SyncStrings
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,9 +26,12 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.PagerState
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -30,10 +39,12 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Public
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
@@ -41,7 +52,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -51,14 +61,21 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.min
+import androidx.compose.ui.util.lerp
 import androidx.core.net.toUri
+import kotlin.math.absoluteValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aaps.core.keys.KeysStrings
 import app.aaps.core.keys.PushedWatchfaceId
@@ -231,10 +248,20 @@ internal fun WearMainContent(
     uiState.customWatchfaceNotShown?.let { name ->
         OkDialog(
             title = pushedWatchfaceLabel(PushedWatchfaceId.CWF),
-            message = stringResource(SyncStrings.wear_custom_watchface_not_shown, name),
+            message = stringResource(SyncStrings.wear_custom_watchface_not_shown_on, pushedWatchfaceLabel(uiState.selectedWatchface), name),
             onDismiss = onDismissCustomWatchfaceNotShown
         )
     }
+
+    // The face cards. The pager starts on the face that is on the watch and follows it after a
+    // change, so the outlined card is the centred one when the screen opens.
+    val pushedFaces = PushedWatchfaceId.ALL
+    val pagerState = rememberPagerState(initialPage = pushedFaces.indexOf(uiState.selectedWatchface).coerceAtLeast(0)) { pushedFaces.size }
+    LaunchedEffect(uiState.selectedWatchface) {
+        val page = pushedFaces.indexOf(uiState.selectedWatchface)
+        if (page >= 0 && page != pagerState.currentPage) pagerState.animateScrollToPage(page)
+    }
+    val pushedFacesShown = uiState.isDeviceConnected && uiState.watchFacePushSupported
 
     Column(
         modifier = modifier
@@ -270,7 +297,7 @@ internal fun WearMainContent(
 
         // Pushed Watchface Card: only on a watch that reported Watch Face Push (Wear OS 6+). Below
         // that the pushed faces cannot exist, and a choice that does nothing would only mislead.
-        if (uiState.isDeviceConnected && uiState.watchFacePushSupported) {
+        if (pushedFacesShown) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -278,60 +305,44 @@ internal fun WearMainContent(
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(AapsSpacing.large),
+                        .padding(vertical = AapsSpacing.large),
                     verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
                 ) {
                     Text(
                         text = stringResource(StringKey.WearPushedWatchface.title),
                         style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(horizontal = AapsSpacing.small)
+                        modifier = Modifier.padding(horizontal = AapsSpacing.extraLarge)
                     )
 
                     // Watch Face Push gives the app one slot, so this is a choice between the
-                    // embedded faces, not a set of switches. The tap asks first, see pendingWatchface.
-                    // While the watch still holds the other face - the seconds an install takes,
-                    // or longer after a reinstall until the preferences reach it - the chosen row
-                    // says so, quietly: it is progress, not a fault.
+                    // embedded faces, not a set of switches: one card per face, the one on the
+                    // watch outlined, a button on the others. The button asks first, see
+                    // pendingWatchface. While the watch still holds the other face - the seconds
+                    // an install takes, or longer after a reinstall until the preferences reach
+                    // it - the chosen card says so, quietly: it is progress, not a fault.
                     val selectedId = uiState.selectedWatchface
                     val installing = uiState.installedWatchface != null && uiState.installedWatchface != selectedId
-                    Column(modifier = Modifier.selectableGroup()) {
-                        listOf(PushedWatchfaceId.CWF, PushedWatchfaceId.WFS, PushedWatchfaceId.CIRCLE).forEach { face ->
-                            val selected = face == selectedId
-                            WatchfaceChoiceRow(
-                                label = pushedWatchfaceLabel(face),
-                                selected = selected,
-                                hint = if (selected && installing) stringResource(SyncStrings.wear_pushed_watchface_installing) else null,
-                                onSelect = { if (!selected) pendingWatchface = face }
-                            )
-                        }
-                    }
-
-                    // What the wrist shows with a built-in face chosen. The custom face needs no
-                    // picture here: its own preview is in its own card below.
-                    val preview = when (selectedId) {
-                        PushedWatchfaceId.WFS    -> R.drawable.wfs_watchface_preview
-                        PushedWatchfaceId.CIRCLE -> R.drawable.circle_watchface_preview
-                        else                     -> null
-                    }
-                    if (preview != null) {
-                        Spacer(modifier = Modifier.height(AapsSpacing.small))
-                        Image(
-                            painter = painterResource(preview),
-                            contentDescription = pushedWatchfaceLabel(selectedId),
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = AapsSpacing.extraLarge),
-                            contentScale = ContentScale.FillWidth
+                    WatchfaceCarousel(state = pagerState, faces = pushedFaces) { page ->
+                        val face = pushedFaces[page]
+                        val selected = face == selectedId
+                        WatchfaceCard(
+                            face = face,
+                            customImage = uiState.watchfaceImage,
+                            selected = selected,
+                            hint = if (selected && installing) stringResource(SyncStrings.wear_pushed_watchface_installing) else null,
+                            onUse = { pendingWatchface = face }
                         )
                     }
                 }
             }
         }
 
-        // Custom Watchface Card (visible only when connected), whatever face is chosen above: a
-        // watch below Wear OS 6 runs the code-based face, a watch like the Galaxy Watch 5 runs it
-        // beside the pushed faces, and a zip can be loaded before switching
-        if (uiState.isDeviceConnected) {
+        // Custom Watchface Card (visible only when connected): a watch below Wear OS 6 runs the
+        // code-based face, a watch like the Galaxy Watch 5 runs it beside the pushed faces, and a
+        // zip can be loaded before switching. With the face cards above it belongs to the custom
+        // face's card, so it shows while that card is the centred one.
+        val customCardShown = uiState.isDeviceConnected && (!pushedFacesShown || pushedFaces[pagerState.currentPage] == PushedWatchfaceId.CWF)
+        if (customCardShown) {
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer)
@@ -391,34 +402,184 @@ private fun pushedWatchfaceLabel(face: String): String =
         }
     )
 
-/** One radio row; [hint] is a quiet note after the label, for a state that will pass by itself */
+/** One line on what a face is for, under its name on the card */
 @Composable
-private fun WatchfaceChoiceRow(
-    label: String,
+private fun pushedWatchfaceSummary(face: String): String =
+    stringResource(
+        when (face) {
+            PushedWatchfaceId.CWF    -> SyncStrings.wear_pushed_watchface_cwf_summary
+            PushedWatchfaceId.CIRCLE -> SyncStrings.wear_pushed_watchface_circle_summary
+            else                     -> SyncStrings.wear_pushed_watchface_wfs_summary
+        }
+    )
+
+/**
+ * Metrics of the face cards. The same numbers as the management carousel in :ui, which this
+ * module does not depend on; the peek is smaller so the picture of a face can be larger.
+ */
+private object WatchfaceCarouselDefaults {
+
+    /** Largest size of the face picture; on a narrow phone it is the card's width instead */
+    val ImageSize = 200.dp
+
+    /** Height of a card without its picture and texts: the button, the three gaps and the padding */
+    val ButtonAndGapsHeight = 92.dp
+
+    /** Horizontal peek so the neighbouring cards stay partially visible */
+    val ContentPadding = 64.dp
+
+    /** Gap between adjacent cards */
+    val PageSpacing = 16.dp
+
+    /** Scale and alpha of a fully off-centre card; the centred card renders at 1f */
+    const val MIN_SCALE = 0.85f
+    const val MIN_ALPHA = 0.5f
+}
+
+/** The face cards side by side, the centred one full size, and the page dots under them */
+@Composable
+private fun WatchfaceCarousel(
+    state: PagerState,
+    faces: List<String>,
+    card: @Composable (page: Int) -> Unit
+) {
+    BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+        // The pager needs a fixed height. It is the height of the tallest card, measured with the
+        // picture's real size on this phone and the texts at the wearer's font size: a fixed
+        // number squeezed the button on a phone with large text and left a gap on one with small.
+        val pageWidth = maxWidth - WatchfaceCarouselDefaults.ContentPadding * 2
+        val contentWidth = pageWidth - AapsSpacing.large * 2
+        val imageSize = min(WatchfaceCarouselDefaults.ImageSize, contentWidth)
+        val textMeasurer = rememberTextMeasurer()
+        val density = LocalDensity.current
+        val titleStyle = MaterialTheme.typography.titleMedium
+        val summaryStyle = MaterialTheme.typography.bodySmall
+        val textConstraints = Constraints(maxWidth = with(density) { contentWidth.roundToPx() })
+        val textHeightPx = faces.maxOf { face ->
+            textMeasurer.measure(pushedWatchfaceLabel(face), titleStyle, constraints = textConstraints).size.height +
+                textMeasurer.measure(pushedWatchfaceSummary(face), summaryStyle, constraints = textConstraints).size.height
+        }
+        val cardHeight = imageSize + with(density) { textHeightPx.toDp() } + WatchfaceCarouselDefaults.ButtonAndGapsHeight
+        Column(modifier = Modifier.fillMaxWidth()) {
+            HorizontalPager(
+                state = state,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(cardHeight),
+                contentPadding = PaddingValues(horizontal = WatchfaceCarouselDefaults.ContentPadding),
+                pageSpacing = WatchfaceCarouselDefaults.PageSpacing
+            ) { page ->
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .graphicsLayer {
+                            val pageOffset = ((state.currentPage - page) + state.currentPageOffsetFraction).absoluteValue
+                            val fraction = 1f - pageOffset.coerceIn(0f, 1f)
+                            val scale = lerp(WatchfaceCarouselDefaults.MIN_SCALE, 1f, fraction)
+                            scaleX = scale
+                            scaleY = scale
+                            alpha = lerp(WatchfaceCarouselDefaults.MIN_ALPHA, 1f, fraction)
+                        }
+                ) {
+                    card(page)
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = AapsSpacing.medium),
+                horizontalArrangement = Arrangement.Center
+            ) {
+                repeat(state.pageCount) { page ->
+                    val isSelected = page == state.currentPage
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = AapsSpacing.small)
+                            .width(if (isSelected) 24.dp else 8.dp)
+                            .height(8.dp)
+                            .background(
+                                color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
+                                shape = CircleShape
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * One face: its picture, name and summary. The face on the watch is outlined and says so; the
+ * others get the button that installs them. [hint] is a quiet note for a state that passes by
+ * itself. [customImage] is the wearer's own zip preview, shown on the custom face's card when one
+ * is loaded.
+ */
+@Composable
+private fun WatchfaceCard(
+    face: String,
+    customImage: ImageBitmap?,
     selected: Boolean,
     hint: String?,
-    onSelect: () -> Unit
+    onUse: () -> Unit
 ) {
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        modifier = Modifier
-            .fillMaxWidth()
-            .selectable(selected = selected, onClick = onSelect, role = Role.RadioButton)
-            .padding(vertical = AapsSpacing.small, horizontal = AapsSpacing.small)
+    val label = pushedWatchfaceLabel(face)
+    Card(
+        modifier = Modifier.fillMaxSize(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (selected) MaterialTheme.colorScheme.secondaryContainer else MaterialTheme.colorScheme.surfaceContainerHigh
+        ),
+        border = if (selected) BorderStroke(2.dp, MaterialTheme.colorScheme.primary) else null
     ) {
-        RadioButton(selected = selected, onClick = null)
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodyLarge,
-            modifier = Modifier.padding(start = AapsSpacing.medium)
-        )
-        if (hint != null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(AapsSpacing.large),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(AapsSpacing.medium)
+        ) {
+            val imageModifier = Modifier
+                .widthIn(max = WatchfaceCarouselDefaults.ImageSize)
+                .fillMaxWidth()
+                .aspectRatio(1f)
+            if (face == PushedWatchfaceId.CWF && customImage != null) {
+                Image(bitmap = customImage, contentDescription = label, modifier = imageModifier, contentScale = ContentScale.Fit)
+            } else {
+                val preview = when (face) {
+                    PushedWatchfaceId.CWF    -> R.drawable.cwf_watchface_preview
+                    PushedWatchfaceId.CIRCLE -> R.drawable.circle_watchface_preview
+                    else                     -> R.drawable.wfs_watchface_preview
+                }
+                Image(painter = painterResource(preview), contentDescription = label, modifier = imageModifier, contentScale = ContentScale.Fit)
+            }
             Text(
-                text = hint,
+                text = label,
+                style = MaterialTheme.typography.titleMedium,
+                textAlign = TextAlign.Center
+            )
+            Text(
+                text = pushedWatchfaceSummary(face),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(start = AapsSpacing.small)
+                textAlign = TextAlign.Center
             )
+            // The button and the "on the watch" line sit at the bottom whatever the summary's length
+            Spacer(modifier = Modifier.weight(1f))
+            if (selected) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(AapsSpacing.small)) {
+                    Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp), tint = MaterialTheme.colorScheme.primary)
+                    Text(
+                        text = hint ?: stringResource(SyncStrings.wear_pushed_watchface_active),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+            } else {
+                Button(onClick = onUse) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(text = stringResource(SyncStrings.wear_pushed_watchface_use))
+                }
+            }
         }
     }
 }

@@ -6,8 +6,8 @@ import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 
 /**
- * The parts of the glucose circle face that need no watch: when the picture is redrawn, and which
- * way the trend arc points.
+ * The parts of the glucose circle face that need no watch: when the picture is redrawn, which way
+ * the trend arc points, and which colour the ring gets.
  */
 class GlucoseCircleTest {
 
@@ -65,5 +65,19 @@ class GlucoseCircleTest {
         assertThat(TrendArrow.SINGLE_UP.toArcIndicator()?.centerAngle).isEqualTo(-90f)
         assertThat(TrendArrow.SINGLE_DOWN.toArcIndicator()?.centerAngle).isEqualTo(90f)
         assertThat(TrendArrow.TRIPLE_DOWN.toArcIndicator()?.triangleCount).isEqualTo(3)
+    }
+
+    // ---- colour -----------------------------------------------------------------------------
+
+    @Test
+    fun `high, low and in range get the soft colours`() {
+        assertThat(GlucoseCircleComplication.circleColor(1L)).isEqualTo(GlucoseCircleComplication.HIGH_COLOR)
+        assertThat(GlucoseCircleComplication.circleColor(-1L)).isEqualTo(GlucoseCircleComplication.LOW_COLOR)
+        assertThat(GlucoseCircleComplication.circleColor(0L)).isEqualTo(GlucoseCircleComplication.IN_RANGE_COLOR)
+    }
+
+    @Test
+    fun `an unknown level is drawn as in range`() {
+        assertThat(GlucoseCircleComplication.circleColor(7L)).isEqualTo(GlucoseCircleComplication.IN_RANGE_COLOR)
     }
 }

@@ -29,6 +29,7 @@ import app.aaps.wear.complications.SgvComplicationExt1
 import app.aaps.wear.complications.SgvComplicationExt2
 import app.aaps.wear.complications.SgvLargeComplication
 import app.aaps.wear.complications.TargetComplication
+import app.aaps.wear.complications.ReservoirComplication
 import app.aaps.wear.complications.UploaderBatteryComplication
 import app.aaps.wear.complications.WallpaperDarkComplication
 import app.aaps.wear.complications.WallpaperGrayComplication
@@ -480,6 +481,12 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(UploaderBatteryComplication::class)
     fun bindUploaderBatteryComplication(injector: MembersInjector<UploaderBatteryComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(ReservoirComplication::class)
+    fun bindReservoirComplication(injector: MembersInjector<ReservoirComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

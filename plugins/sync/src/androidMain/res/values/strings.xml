@@ -124,10 +124,15 @@
     <string name="wear_custom_watchface_settings">Custom Watchface Settings</string>
     <string name="wear_custom_watchface">Custom Watchface: %1$s</string>
     <string name="wear_pushed_watchface_installing" comment="Short note after the selected watchface while the watch is still replacing its face">Installing…</string>
-    <string name="wear_custom_watchface_not_shown" comment="Dialog after a custom watchface was sent while the complications watchface is selected. %1$s=name of the sent custom watchface">The watch shows the Complications watchface. Select Custom watchface to see %1$s on the watch.</string>
+    <string name="wear_pushed_watchface_active" comment="Short line on the card of the watchface that is on the watch now">On the watch</string>
+    <string name="wear_pushed_watchface_use" comment="Button on the card of a watchface that is not on the watch; pressing it installs that watchface">Use on watch</string>
+    <string name="wear_pushed_watchface_cwf_summary" comment="One line under the Custom watchface card">The watchface you load below. Pick a design from the community or make your own. Not changeable on the watch.</string>
+    <string name="wear_pushed_watchface_wfs_summary" comment="One line under the Dashboard watchface card">All your data at a glance: BG graph, glucose, IOB, COB, basal and more in AAPS complication slots.</string>
+    <string name="wear_pushed_watchface_circle_summary" comment="One line under the Glucose circle watchface card">A large glucose circle like the overview, with time, date and a few slots for complications.</string>
+    <string name="wear_custom_watchface_not_shown_on" comment="Dialog after a custom watchface zip was sent while a built-in watchface is selected. %1$s=name of the watchface shown now, %2$s=name of the sent custom watchface. Example: The watch shows the Dashboard watchface. Select Custom watchface to see MyFace on the watch.">The watch shows the %1$s. Select Custom watchface to see %2$s on the watch.</string>
     <string name="wear_pushed_watchface_confirm_title">Change the watchface on the watch?</string>
-    <string name="wear_pushed_watchface_confirm_message" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Complications watchface will replace the Custom watchface on the watch.">%1$s will replace the %2$s on the watch.</string>
-    <string name="wear_pushed_watchface_confirm_message_from_complications" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Custom watchface will replace the Complications watchface on the watch.">%1$s will replace the %2$s on the watch. Complications you changed in the watch face editor go back to the defaults.</string>
+    <string name="wear_pushed_watchface_confirm_message" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Dashboard watchface will replace the Custom watchface on the watch.">%1$s will replace the %2$s on the watch.</string>
+    <string name="wear_pushed_watchface_confirm_message_from_complications" comment="%1$s=name of the watchface that will be installed, %2$s=name of the one installed now. Example: Custom watchface will replace the Dashboard watchface on the watch.">%1$s will replace the %2$s on the watch. Complications you changed in the watch face editor go back to the defaults.</string>
     <string name="wear_load_watchface">Load Watchface</string>
     <string name="wear_infos_watchface">Infos Watchface</string>
     <string name="wear_export_watchface">Export template</string>

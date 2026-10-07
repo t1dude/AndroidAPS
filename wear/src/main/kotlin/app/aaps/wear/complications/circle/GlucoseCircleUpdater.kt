@@ -31,8 +31,8 @@ import kotlinx.coroutines.launch
  * minutes. A pushed update is delivered at once, so this asks for one exactly when the shown minute
  * count changes - once a minute, on the reading's own grid rather than the clock's.
  *
- * Also refreshes both circle slots when the watch wakes or dozes: on waking the picture may be
- * minutes old, and the always-on readout's tap action depends on the mode.
+ * Also refreshes the picture when the watch wakes, because it may be minutes old by then, and the
+ * always-on readout on every mode change, because its tap action depends on the mode.
  *
  * Only while a face shows the circle, judged the same way as the Custom watchface: a request within
  * the last ten minutes. Without one nothing is drawn or asked for.
@@ -81,7 +81,10 @@ class GlucoseCircleUpdater(
             wasAmbient = dozing
             if (!hasDemand()) return
             aapsLogger.debug(LTag.WEAR, "GlucoseCircleUpdater: ambient=$dozing")
-            circle.requestUpdateAll()
+            // The picture only on waking: it is hidden while dozing. On a Galaxy Watch the picture
+            // sometimes stayed visible in ambient. A new picture that lands just after the watch
+            // dozed is the likely cause.
+            if (!dozing) circle.requestUpdateAll()
             ambient.requestUpdateAll()
             // The tick loop may be asleep on a wait computed before the watch froze
             startTicks()

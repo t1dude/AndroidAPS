@@ -46,6 +46,7 @@ import app.aaps.wear.complications.IobDetailedComplication
 import app.aaps.wear.complications.IobIconComplication
 import app.aaps.wear.complications.LongStatusComplication
 import app.aaps.wear.complications.LongStatusFlippedComplication
+import app.aaps.wear.complications.ReservoirComplication
 import app.aaps.wear.complications.RunningModeComplication
 import app.aaps.wear.complications.SgvComplication
 import app.aaps.wear.complications.SgvComplicationExt1
@@ -465,6 +466,7 @@ class DataHandlerWear(
             BrCobIobComplicationExt2::class.java,
             // Battery complication
             UploaderBatteryComplication::class.java,
+            ReservoirComplication::class.java,
             // Running mode complication
             RunningModeComplication::class.java
             // Note: WallpaperComplication is abstract, subclasses will auto-update

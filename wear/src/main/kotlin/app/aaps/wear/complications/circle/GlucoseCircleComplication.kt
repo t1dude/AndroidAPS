@@ -2,7 +2,6 @@ package app.aaps.wear.complications.circle
 
 import android.app.PendingIntent
 import android.graphics.drawable.Icon
-import androidx.compose.ui.graphics.toArgb
 import androidx.wear.watchface.complications.data.ComplicationData
 import androidx.wear.watchface.complications.data.ComplicationType
 import androidx.wear.watchface.complications.data.PlainComplicationText
@@ -14,7 +13,6 @@ import app.aaps.wear.R
 import app.aaps.wear.complications.ComplicationAction
 import app.aaps.wear.complications.ModernBaseComplicationProviderService
 import app.aaps.wear.data.ComplicationData as ComplicationStore
-import app.aaps.wear.interaction.activities.bgColor
 import app.aaps.wear.interaction.utils.Constants
 
 /**
@@ -36,7 +34,21 @@ class GlucoseCircleComplication : ModernBaseComplicationProviderService() {
          * The circle slot's width as a share of the face, from `src/circle/template/watchface.xml`.
          * The picture is drawn at the size the slot shows it, so it is neither blurred nor wasted.
          */
-        private const val SLOT_FRACTION = 270f / 450f
+        private const val SLOT_FRACTION = 236f / 450f
+
+        /**
+         * Softer than the pure green, yellow and red the rest of the watch uses, to sit calmly on the
+         * face's dark background. Still told apart by lightness, not by hue alone.
+         */
+        internal const val IN_RANGE_COLOR = 0xFF5BD68A.toInt()
+        internal const val HIGH_COLOR = 0xFFF2C14E.toInt()
+        internal const val LOW_COLOR = 0xFFFF7A6B.toInt()
+
+        internal fun circleColor(sgvLevel: Long): Int = when (sgvLevel) {
+            1L   -> HIGH_COLOR
+            -1L  -> LOW_COLOR
+            else -> IN_RANGE_COLOR
+        }
 
         /** When a face last asked for the picture; 0 until one has. Read by [GlucoseCircleUpdater]. */
         @Volatile var lastRequestMs = 0L
@@ -82,7 +94,7 @@ class GlucoseCircleComplication : ModernBaseComplicationProviderService() {
         val age = System.currentTimeMillis() - bg.timeStamp
         return GlucoseCircleInput(
             bgText = bg.sgvString,
-            bgColor = bgColor(bg.sgvLevel).toArgb(),
+            bgColor = circleColor(bg.sgvLevel),
             strikeThrough = hasBg && age > Constants.STALE_MS,
             trendArrow = bg.trendArrow(),
             hasBg = hasBg,

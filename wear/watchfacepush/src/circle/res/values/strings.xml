@@ -3,7 +3,10 @@
      editor on a customizable slot, so they have to be string resources - see the cwf face. English
      only: this code-free APK carries no translations of its own. -->
 <resources>
-    <string name="slot_top">Top</string>
-    <string name="slot_middle">Middle</string>
-    <string name="slot_bottom">Bottom</string>
+    <string name="dial_left">Left dial</string>
+    <string name="dial_right">Right dial</string>
+    <string name="edge_top_left">Edge, top left</string>
+    <string name="edge_top_right">Edge, top right</string>
+    <string name="edge_bottom_right">Edge, bottom right</string>
+    <string name="edge_bottom_left">Edge, bottom left</string>
 </resources>

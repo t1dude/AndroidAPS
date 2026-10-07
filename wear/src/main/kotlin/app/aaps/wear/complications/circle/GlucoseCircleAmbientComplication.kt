@@ -5,16 +5,13 @@ import app.aaps.wear.complications.CwfAmbientBgComplication
 import app.aaps.wear.complications.cwf.CwfFaceComplication
 
 /**
- * The glucose reading drawn by the runtime inside the circle while the watch dozes.
+ * The glucose value shown inside the circle in ambient mode.
  *
- * In always-on our process is frozen, so the circle picture would sit there with an age that has
- * stopped counting. The face hides the picture then and shows this instead: the value, and a
- * "minutes ago" that the runtime keeps counting by itself - see [CwfAmbientBgComplication].
+ * The wear app does not run in ambient mode, so the age in the picture would stop. The face hides the
+ * picture then and shows this text, whose age the watch keeps counting.
  *
- * Its slot covers the circle and is invisible while the watch is awake, yet still takes the taps
- * there. So awake it does what the circle does and opens the BG graph; dozing it does nothing, so
- * the first tap wakes the watch instead of opening AAPS - see `readoutTapAction` for that history.
- * [GlucoseCircleUpdater] asks for new data on every mode change so the action follows the mode.
+ * The slot covers the circle, so it also gets the taps while the watch is awake: it then opens the BG
+ * graph. In ambient mode it does nothing, so the first tap wakes the watch.
  */
 class GlucoseCircleAmbientComplication : CwfAmbientBgComplication() {
 

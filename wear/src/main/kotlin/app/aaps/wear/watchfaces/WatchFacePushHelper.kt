@@ -39,7 +39,7 @@ enum class PushedFace(val id: String) {
     /** The face that shows the wearer's own Custom watchface zip as a picture */
     CWF(PushedWatchfaceId.CWF),
 
-    /** The overview's glucose circle with three AAPS complication slots beside it */
+    /** The face with the overview's glucose circle */
     CIRCLE(PushedWatchfaceId.CIRCLE);
 
     val assetApk: String get() = "watchfacepush/$id.apk"

@@ -211,7 +211,7 @@ internal fun WearMainContent(
         val current = uiState.selectedWatchface
         // Leaving a face with complication slots loses what was edited on it in the watch face
         // editor: the runtime drops a face's user configuration when a face of another package name
-        // takes the slot. Leaving the custom face loses nothing worth a warning, so only it is quiet.
+        // takes the slot. The custom face has nothing to lose, so it gets no warning.
         val message =
             if (current != PushedWatchfaceId.CWF) SyncStrings.wear_pushed_watchface_confirm_message_from_complications
             else SyncStrings.wear_pushed_watchface_confirm_message

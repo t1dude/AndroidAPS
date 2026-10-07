@@ -365,8 +365,7 @@
                 android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
-        <!-- The glucose circle face's picture: the overview's BG circle drawn as an image, because
-             Watch Face Format cannot draw it. Only that face uses it, so it is not offered to others. -->
+        <!-- The glucose circle face's picture. Only that face uses it. -->
         <service
             android:name=".complications.circle.GlucoseCircleComplication"
             android:exported="true"
@@ -388,8 +387,7 @@
                 android:value="${applicationId}.watchfacepush.circle" />
         </service>
 
-        <!-- The same reading as text, drawn by the runtime inside the circle while the watch dozes -
-             see GlucoseCircleAmbientComplication. -->
+        <!-- The reading as text, shown inside the circle in ambient mode -->
         <service
             android:name=".complications.circle.GlucoseCircleAmbientComplication"
             android:exported="true"

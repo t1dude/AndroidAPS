@@ -5,16 +5,11 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.Test
 
-/**
- * The parts of the glucose circle face that need no watch: when the picture is redrawn, which way
- * the trend arc points, and which colour the ring gets.
- */
+/** Glucose circle logic that needs no watch */
 class GlucoseCircleTest {
 
     private fun bg(slopeArrow: String, deltaMgdl: Double? = null) =
         EventData.SingleBg(dataset = 0, timeStamp = 0L, slopeArrow = slopeArrow, sgv = 120.0, high = 180.0, low = 70.0, deltaMgdl = deltaMgdl)
-
-    // ---- when the age changes ---------------------------------------------------------------
 
     @Test
     fun `a fresh reading changes its age one minute after it was taken`() {
@@ -37,8 +32,6 @@ class GlucoseCircleTest {
         // The phone's clock can run a little ahead of the watch's
         assertThat(GlucoseCircleComplication.nextAgeChangeMs(timeStamp = 1_000_000, now = 990_000)).isEqualTo(1_060_000)
     }
-
-    // ---- which way the arc points -----------------------------------------------------------
 
     @Test
     fun `the wire symbol maps back to its trend`() {
@@ -66,8 +59,6 @@ class GlucoseCircleTest {
         assertThat(TrendArrow.SINGLE_DOWN.toArcIndicator()?.centerAngle).isEqualTo(90f)
         assertThat(TrendArrow.TRIPLE_DOWN.toArcIndicator()?.triangleCount).isEqualTo(3)
     }
-
-    // ---- colour -----------------------------------------------------------------------------
 
     @Test
     fun `high, low and in range get the soft colours`() {

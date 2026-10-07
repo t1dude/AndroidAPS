@@ -18,11 +18,8 @@ import java.io.File;
 import javax.imageio.ImageIO;
 
 /**
- * Draws the glucose circle face's background, and a preview of the whole face for the face pickers.
- * Geometry must match gen_watchface_xml.py (450 px face, circle slot 236 px centred at 225, 168).
- *
- * Usage: java FaceArt.java <outDir>. It writes background.png and preview.png; see README.md for
- * where they go.
+ * Draws the glucose circle face's background and preview. The layout must match gen_watchface_xml.py.
+ * Usage: java FaceArt.java <outDir>, see README.md.
  */
 public class FaceArt {
 
@@ -32,7 +29,7 @@ public class FaceArt {
     static final double GX = 225, GY = 168, SLOT = 236, K = SLOT / 270.0;
     static final double RING_R = 106 * K, RING_W = 14 * K;
     static final Color ACCENT = new Color(0xA9, 0xB4, 0xFF);
-    // Dials, as in gen_watchface_xml.py. Their contents were laid out for 84 px; DK scales them.
+    // Dials, as in gen_watchface_xml.py
     static final double DIAL = 108, DK = DIAL / 84, DIAL_LEFT_X = 92, DIAL_RIGHT_X = 358, DIAL_Y = 280;
 
     public static void main(String[] args) throws Exception {
@@ -65,7 +62,7 @@ public class FaceArt {
         return g;
     }
 
-    /** Point at [deg] degrees clockwise from 12 o'clock. */
+    /** Point at [deg] degrees clockwise from 12 o'clock */
     static Point2D.Double polar(double cx, double cy, double r, double deg) {
         double a = Math.toRadians(deg);
         return new Point2D.Double(cx + r * Math.sin(a), cy - r * Math.cos(a));
@@ -80,7 +77,7 @@ public class FaceArt {
             MultipleGradientPaint.CycleMethod.NO_CYCLE));
         g.fill(face);
 
-        // Sunburst from the glucose circle's centre, kept inside the edge band.
+        // Lines from the circle's centre, inside the edge band
         Shape oldClip = g.getClip();
         g.setClip(new Ellipse2D.Double(C - 199, C - 199, 398, 398));
         g.setColor(new Color(255, 255, 255, 34));
@@ -93,12 +90,12 @@ public class FaceArt {
         }
         g.setClip(oldClip);
 
-        // A dark plate under the circle, so the sunburst does not run into the ring.
+        // Dark plate under the circle
         double plate = RING_R + RING_W / 2 + 4 * K;
         g.setColor(new Color(7, 9, 13, 140));
         g.fill(new Ellipse2D.Double(GX - plate, GY - plate, plate * 2, plate * 2));
 
-        // Minute ticks on the edge.
+        // Minute ticks
         for (int i = 0; i < 60; i++) {
             boolean major = i % 5 == 0;
             g.setColor(major ? new Color(0x8a, 0x92, 0xa3) : new Color(0x4a, 0x50, 0x5d));
@@ -107,16 +104,14 @@ public class FaceArt {
         }
     }
 
-    // ------------------------------------------------------------------ preview only
-
     static void drawPreviewContent(Graphics2D g) {
-        // Edge arcs: watch battery, steps (text only), reservoir, rig battery.
+        // Edge: watch battery, steps, reservoir, rig battery
         edgeArc(g, 296, 340, 0.78, "78%", false);
         edgeArc(g, 20, 64, 0.64, "6412", false);
         edgeArc(g, 130, 166, 0.47, "142U", true);
         edgeArc(g, 194, 230, 0.54, "54%", true);
 
-        // Glucose circle, in range, flat.
+        // Glucose circle, in range, flat
         Color bg = new Color(0x5B, 0xD6, 0x8A);
         g.setStroke(new BasicStroke((float) RING_W, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         g.setColor(new Color(bg.getRed(), bg.getGreen(), bg.getBlue(), 77));
@@ -136,7 +131,7 @@ public class FaceArt {
         text(g, "+0.1", GX, GY + 46 * K, 24 * K, Font.BOLD, new Color(0xca, 0xc4, 0xd0));
         text(g, "2 min ago", GX, GY + 72 * K, 20 * K, Font.PLAIN, new Color(0xca, 0xc4, 0xd0));
 
-        // Dials: weather on the left, IOB on the right.
+        // Dials: weather, IOB
         dial(g, DIAL_LEFT_X, DIAL_Y);
         Point2D.Double sun = new Point2D.Double(DIAL_LEFT_X, DIAL_Y - 12 * DK);
         g.setColor(ACCENT);
@@ -149,7 +144,6 @@ public class FaceArt {
         text(g, "IOB", DIAL_RIGHT_X, DIAL_Y - 8 * DK, 11 * DK, Font.BOLD, ACCENT);
         text(g, "1.25U", DIAL_RIGHT_X, DIAL_Y + 14 * DK, 21 * DK, Font.BOLD, new Color(0xf3, 0xf5, 0xfa));
 
-        // Time and date.
         text(g, "10:08", C, 364, 64, Font.PLAIN, new Color(0xf3, 0xf5, 0xfa));
         text(g, "Tue 7 Oct", C, 392, 17, Font.BOLD, new Color(0x9a, 0xa3, 0xb5));
     }
@@ -164,7 +158,7 @@ public class FaceArt {
         g.setColor(new Color(255, 255, 255, 23));
         g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
         double r = 35 * DK;
-        // Track: 280 degrees, open at the bottom. Arc2D angles run counter-clockwise from 3 o'clock.
+        // 280 degrees, open at the bottom. Arc2D angles run counter-clockwise from 3 o'clock.
         g.draw(new Arc2D.Double(x - r, y - r, 2 * r, 2 * r, -50, 280, Arc2D.OPEN));
     }
 
@@ -178,22 +172,18 @@ public class FaceArt {
         edgeText(g, a0, a1, label, bottom);
     }
 
-    /** An arc from [a0] to [a1], both clockwise from 12 o'clock, as Java2D wants it. */
+    /** Arc from [a0] to [a1], in degrees clockwise from 12 o'clock */
     static Shape clockArc(double r, double a0, double a1) {
         return new Arc2D.Double(C - r, C - r, 2 * r, 2 * r, 90 - a0, -(a1 - a0), Arc2D.OPEN);
     }
 
-    /**
-     * Text along the edge, upright for the reader in the top and bottom half. Like the face, it starts
-     * at the left end of the span, after the room the face keeps for an icon.
-     */
+    /** Text along the edge, readable on the top and bottom half, starting after the icon space */
     static void edgeText(Graphics2D g, double a0, double a1, String label, boolean bottom) {
         Font font = new Font("SansSerif", Font.BOLD, 15);
         g.setFont(font);
         g.setColor(new Color(0xc6, 0xcd, 0xdd));
         FontMetrics fm = g.getFontMetrics();
         double r = bottom ? 186 : 191;
-        // Angle per pixel along the radius.
         double degPerPx = Math.toDegrees(1.0 / r);
         double angle = bottom ? a1 - 8 : a0 + 8;
         for (char ch : label.toCharArray()) {

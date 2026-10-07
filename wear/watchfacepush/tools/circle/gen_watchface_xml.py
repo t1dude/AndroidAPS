@@ -33,17 +33,24 @@ EDGES = [
 ]
 
 # Dials: (slotId, name, display string, x, y, default policy)
-DIAL = 84
+DIAL = 108
+DIAL_LEFT = (92, 280)
+DIAL_RIGHT = (358, 280)
+# The dial's contents were laid out for 84 px; this scales them to DIAL.
+DK = DIAL / 84
 DIALS = [
-    (2, "DialLeft", "dial_left", 100 - DIAL // 2, 290 - DIAL // 2,
+    (2, "DialLeft", "dial_left", DIAL_LEFT[0] - DIAL // 2, DIAL_LEFT[1] - DIAL // 2,
      'defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"'),
-    (4, "DialRight", "dial_right", 350 - DIAL // 2, 290 - DIAL // 2,
+    (4, "DialRight", "dial_right", DIAL_RIGHT[0] - DIAL // 2, DIAL_RIGHT[1] - DIAL // 2,
      'primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.IobIconComplication" primaryProviderType="SHORT_TEXT" '
      'defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY"'),
 ]
 
 RANGE = ("clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / "
          "([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)")
+# Goal progress (Watch Face Format 2): steps against the daily goal. The value may pass the target;
+# the arc stops at full.
+GOAL = "clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)"
 
 
 def polar(r, deg, cx=225, cy=225):
@@ -72,15 +79,19 @@ def text_part(x, y, w, h, size, expression, color="#ffffffff", weight="NORMAL", 
 
 def edge_slot(slot_id, name, display, a0, a1, bottom, policy):
     span = a1 - a0
-    ix, iy = polar(200, a0 - 8)
-    icon = 20
-    r_text = 192 if bottom else 188
+    # Icon first, then the label, both read from the left: on the top half that is the arc's start,
+    # on the bottom half its end. The label starts after the icon whether there is one or not.
+    icon = 18
     if bottom:
-        circular = (f'startAngle="{a1}" endAngle="{a0}" direction="COUNTER_CLOCKWISE"')
+        ix, iy = polar(187, a1 - 3.5)
+        circular = f'startAngle="{a1 - 8}" endAngle="{a0}" direction="COUNTER_CLOCKWISE"'
+        r_text = 192
     else:
-        circular = f'startAngle="{a0}" endAngle="{a1}" direction="CLOCKWISE"'
+        ix, iy = polar(193, a0 + 3.5)
+        circular = f'startAngle="{a0 + 8}" endAngle="{a1}" direction="CLOCKWISE"'
+        r_text = 188
     label = f'''                <PartText x="0" y="0" width="450" height="450">
-                    <TextCircular centerX="225" centerY="225" width="{2 * r_text}" height="{2 * r_text}" {circular} align="CENTER" ellipsis="TRUE">
+                    <TextCircular centerX="225" centerY="225" width="{2 * r_text}" height="{2 * r_text}" {circular} align="START" ellipsis="TRUE">
                         {font(15, LABEL, "SEMI_BOLD")}
                             <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
                         </Font>
@@ -101,7 +112,7 @@ def edge_slot(slot_id, name, display, a0, a1, bottom, policy):
             slotId="{slot_id}"
             displayName="@string/{display}"
             isCustomizable="TRUE"
-            supportedTypes="RANGED_VALUE SHORT_TEXT EMPTY"
+            supportedTypes="RANGED_VALUE GOAL_PROGRESS SHORT_TEXT EMPTY"
             alpha="255"
             x="0" y="0" width="450" height="450">
             <Variant mode="AMBIENT" target="alpha" value="0" />
@@ -120,12 +131,30 @@ def edge_slot(slot_id, name, display, a0, a1, bottom, policy):
 {icon_part}
 {label}
             </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="{a0}" endAngle="{a1}">
+                        <Stroke color="{TRACK}" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="{a0}" endAngle="{a0}">
+                        <Stroke color="{ACCENT}" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="{a0} + {span} * {GOAL}" />
+                    </Arc>
+                </PartDraw>
+{icon_part}
+{label}
+            </Complication>
             <Complication type="SHORT_TEXT">
 {icon_part}
 {label}
             </Complication>
             <Complication type="EMPTY" />
         </ComplicationSlot>'''
+
+
+def k(n):
+    """A size from the 84 px dial layout, scaled to DIAL and rounded, as Watch Face Format wants."""
+    return round(n * DK)
 
 
 def dial_slot(slot_id, name, display, x, y, policy):
@@ -136,11 +165,11 @@ def dial_slot(slot_id, name, display, x, y, policy):
                         <Fill color="#ff10141c" />
                         <Stroke color="#1fffffff" thickness="1.5" />
                     </Ellipse>
-                    <Arc centerX="{f(c)}" centerY="{f(c)}" width="70" height="70" startAngle="220" endAngle="500">
+                    <Arc centerX="{f(c)}" centerY="{f(c)}" width="{k(70)}" height="{k(70)}" startAngle="220" endAngle="500">
                         <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
                     </Arc>
                 </PartDraw>'''
-    icon_big = f'''                <PartImage x="22" y="22" width="40" height="40" tintColor="{ACCENT}">
+    icon_big = f'''                <PartImage x="{k(22)}" y="{k(22)}" width="{k(40)}" height="{k(40)}" tintColor="{ACCENT}">
                     <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                 </PartImage>'''
     short_text = f'''                <Condition>
@@ -149,17 +178,17 @@ def dial_slot(slot_id, name, display, x, y, policy):
                         <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
                     </Expressions>
                     <Compare expression="iconAndText">
-                        <PartImage x="30" y="13" width="24" height="24" tintColor="{ACCENT}">
+                        <PartImage x="{k(30)}" y="{k(13)}" width="{k(24)}" height="{k(24)}" tintColor="{ACCENT}">
                             <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
                         </PartImage>
-{text_part(4, 38, 76, 30, 22, "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
+{text_part(k(4), k(38), k(76), k(30), k(22), "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
                     </Compare>
                     <Compare expression="titleAndText">
-{text_part(8, 17, 68, 20, 13, "[COMPLICATION.TITLE]", ACCENT, "SEMI_BOLD", 24)}
-{text_part(4, 36, 76, 30, 22, "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
+{text_part(k(8), k(17), k(68), k(20), k(13), "[COMPLICATION.TITLE]", ACCENT, "SEMI_BOLD", 24)}
+{text_part(k(4), k(36), k(76), k(30), k(22), "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
                     </Compare>
                     <Default>
-{text_part(4, 26, 76, 32, 24, "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
+{text_part(k(4), k(26), k(76), k(32), k(24), "[COMPLICATION.TEXT]", "#fff3f5fa", "SEMI_BOLD", 24)}
                     </Default>
                 </Condition>'''
     return f'''        <ComplicationSlot
@@ -167,7 +196,7 @@ def dial_slot(slot_id, name, display, x, y, policy):
             slotId="{slot_id}"
             displayName="@string/{display}"
             isCustomizable="TRUE"
-            supportedTypes="SHORT_TEXT RANGED_VALUE MONOCHROMATIC_IMAGE SMALL_IMAGE EMPTY"
+            supportedTypes="SHORT_TEXT RANGED_VALUE GOAL_PROGRESS MONOCHROMATIC_IMAGE SMALL_IMAGE EMPTY"
             alpha="255"
             x="{x}" y="{y}" width="{d}" height="{d}">
             <Variant mode="AMBIENT" target="alpha" value="0" />
@@ -180,9 +209,19 @@ def dial_slot(slot_id, name, display, x, y, policy):
             <Complication type="RANGED_VALUE">
 {plate}
                 <PartDraw x="0" y="0" width="{d}" height="{d}">
-                    <Arc centerX="{f(c)}" centerY="{f(c)}" width="70" height="70" startAngle="220" endAngle="220">
+                    <Arc centerX="{f(c)}" centerY="{f(c)}" width="{k(70)}" height="{k(70)}" startAngle="220" endAngle="220">
                         <Stroke color="{ACCENT}" thickness="4" cap="ROUND" />
                         <Transform target="endAngle" value="220 + 280 * {RANGE}" />
+                    </Arc>
+                </PartDraw>
+{short_text}
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+{plate}
+                <PartDraw x="0" y="0" width="{d}" height="{d}">
+                    <Arc centerX="{f(c)}" centerY="{f(c)}" width="{k(70)}" height="{k(70)}" startAngle="220" endAngle="220">
+                        <Stroke color="{ACCENT}" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="220 + 280 * {GOAL}" />
                     </Arc>
                 </PartDraw>
 {short_text}
@@ -192,7 +231,7 @@ def dial_slot(slot_id, name, display, x, y, policy):
 {icon_big}
             </Complication>
             <Complication type="SMALL_IMAGE">
-                <PartImage x="6" y="6" width="72" height="72">
+                <PartImage x="{k(6)}" y="{k(6)}" width="{k(72)}" height="{k(72)}">
                     <Image resource="[COMPLICATION.SMALL_IMAGE]" />
                 </PartImage>
             </Complication>
@@ -210,7 +249,8 @@ head = f'''<WatchFace clipShape="CIRCLE" height="450" width="450">
 
          The phone overview's BG circle sits large at the top, the time and date below it, one dial on
          each side, and four optional slots along the edge of the screen: an arc that fills for a value
-         with a range (watch battery, reservoir, rig battery), or a curved label for plain text (steps).
+         with a range (watch battery, reservoir, rig battery) or a goal (steps), or a curved label for
+         plain text. Goal progress needs Watch Face Format 2, set in src/circle/AndroidManifest.xml.
 
          Watch Face Format cannot draw an arc that follows glucose data, so the circle is a picture
          drawn by the wear app (GlucoseCircleComplication) in a slot the wearer cannot change. Its age
@@ -343,7 +383,7 @@ for d in DIALS:
     parts.append(dial_slot(*d))
     parts.append("")
 parts.append('''        <!-- The edge: watch battery, steps, reservoir and rig battery by default. An icon, when the
-             complication has one, sits just before the start of its arc. -->
+             complication has one, sits at the left end of the label, which reads from there. -->
 ''')
 for e in EDGES:
     parts.append(edge_slot(*e))

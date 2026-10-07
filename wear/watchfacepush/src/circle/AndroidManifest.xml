@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The glucose circle face needs Watch Face Format 2 for goal progress complications (steps against
+     the daily goal). Watch Face Push needs Wear OS 6, which reads up to version 4, so every watch
+     that can install this face can show it. The other faces stay on version 1. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <application>
+        <property
+            android:name="com.google.wear.watchface.format.version"
+            android:value="2"
+            tools:replace="android:value" />
+    </application>
+</manifest>

@@ -22,5 +22,8 @@ for f in wear/watchfacepush/src/circle/res/drawable-nodpi/preview.png \
 done
 ```
 
+The face uses Watch Face Format 2 (for goal progress, such as steps); `src/circle/AndroidManifest.xml`
+sets that for this face only.
+
 Watch Face Format wants whole numbers for the position and size of a part (`PartImage`,
 `PartText`, `PartDraw`); the validator in the wear build fails otherwise.

@@ -32,6 +32,8 @@ public class FaceArt {
     static final double GX = 225, GY = 168, SLOT = 236, K = SLOT / 270.0;
     static final double RING_R = 106 * K, RING_W = 14 * K;
     static final Color ACCENT = new Color(0xA9, 0xB4, 0xFF);
+    // Dials, as in gen_watchface_xml.py. Their contents were laid out for 84 px; DK scales them.
+    static final double DIAL = 108, DK = DIAL / 84, DIAL_LEFT_X = 92, DIAL_RIGHT_X = 358, DIAL_Y = 280;
 
     public static void main(String[] args) throws Exception {
         File out = new File(args[0]);
@@ -110,7 +112,7 @@ public class FaceArt {
     static void drawPreviewContent(Graphics2D g) {
         // Edge arcs: watch battery, steps (text only), reservoir, rig battery.
         edgeArc(g, 296, 340, 0.78, "78%", false);
-        edgeText(g, 20, 64, "6412", false);
+        edgeArc(g, 20, 64, 0.64, "6412", false);
         edgeArc(g, 130, 166, 0.47, "142U", true);
         edgeArc(g, 194, 230, 0.54, "54%", true);
 
@@ -135,16 +137,17 @@ public class FaceArt {
         text(g, "2 min ago", GX, GY + 72 * K, 20 * K, Font.PLAIN, new Color(0xca, 0xc4, 0xd0));
 
         // Dials: weather on the left, IOB on the right.
-        dial(g, 100, 290);
-        Point2D.Double sun = new Point2D.Double(100, 290 - 12);
+        dial(g, DIAL_LEFT_X, DIAL_Y);
+        Point2D.Double sun = new Point2D.Double(DIAL_LEFT_X, DIAL_Y - 12 * DK);
         g.setColor(ACCENT);
         g.setStroke(new BasicStroke(2f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        g.draw(new Ellipse2D.Double(sun.x - 5.5, sun.y - 5.5, 11, 11));
-        for (int a = 0; a < 360; a += 45) g.draw(new Line2D.Double(polar(sun.x, sun.y, 8.5, a), polar(sun.x, sun.y, 11, a)));
-        text(g, "12°", 100, 290 + 19, 23, Font.BOLD, new Color(0xf3, 0xf5, 0xfa));
-        dial(g, 350, 290);
-        text(g, "IOB", 350, 290 - 8, 11, Font.BOLD, ACCENT);
-        text(g, "1.25U", 350, 290 + 14, 21, Font.BOLD, new Color(0xf3, 0xf5, 0xfa));
+        double sunR = 5.5 * DK;
+        g.draw(new Ellipse2D.Double(sun.x - sunR, sun.y - sunR, 2 * sunR, 2 * sunR));
+        for (int a = 0; a < 360; a += 45) g.draw(new Line2D.Double(polar(sun.x, sun.y, 8.5 * DK, a), polar(sun.x, sun.y, 11 * DK, a)));
+        text(g, "12°", DIAL_LEFT_X, DIAL_Y + 19 * DK, 23 * DK, Font.BOLD, new Color(0xf3, 0xf5, 0xfa));
+        dial(g, DIAL_RIGHT_X, DIAL_Y);
+        text(g, "IOB", DIAL_RIGHT_X, DIAL_Y - 8 * DK, 11 * DK, Font.BOLD, ACCENT);
+        text(g, "1.25U", DIAL_RIGHT_X, DIAL_Y + 14 * DK, 21 * DK, Font.BOLD, new Color(0xf3, 0xf5, 0xfa));
 
         // Time and date.
         text(g, "10:08", C, 364, 64, Font.PLAIN, new Color(0xf3, 0xf5, 0xfa));
@@ -153,13 +156,14 @@ public class FaceArt {
 
     static void dial(Graphics2D g, double x, double y) {
         g.setColor(new Color(0x10, 0x14, 0x1c));
-        g.fill(new Ellipse2D.Double(x - 42, y - 42, 84, 84));
+        double half = DIAL / 2.0;
+        g.fill(new Ellipse2D.Double(x - half, y - half, DIAL, DIAL));
         g.setColor(new Color(255, 255, 255, 31));
         g.setStroke(new BasicStroke(1.5f));
-        g.draw(new Ellipse2D.Double(x - 42, y - 42, 84, 84));
+        g.draw(new Ellipse2D.Double(x - half, y - half, DIAL, DIAL));
         g.setColor(new Color(255, 255, 255, 23));
         g.setStroke(new BasicStroke(4f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND));
-        double r = 35;
+        double r = 35 * DK;
         // Track: 280 degrees, open at the bottom. Arc2D angles run counter-clockwise from 3 o'clock.
         g.draw(new Arc2D.Double(x - r, y - r, 2 * r, 2 * r, -50, 280, Arc2D.OPEN));
     }
@@ -179,18 +183,19 @@ public class FaceArt {
         return new Arc2D.Double(C - r, C - r, 2 * r, 2 * r, 90 - a0, -(a1 - a0), Arc2D.OPEN);
     }
 
-    /** Text along the edge, centred on the span, upright for the reader in the top and bottom half. */
+    /**
+     * Text along the edge, upright for the reader in the top and bottom half. Like the face, it starts
+     * at the left end of the span, after the room the face keeps for an icon.
+     */
     static void edgeText(Graphics2D g, double a0, double a1, String label, boolean bottom) {
         Font font = new Font("SansSerif", Font.BOLD, 15);
         g.setFont(font);
         g.setColor(new Color(0xc6, 0xcd, 0xdd));
         FontMetrics fm = g.getFontMetrics();
         double r = bottom ? 186 : 191;
-        double mid = (a0 + a1) / 2;
-        double total = fm.stringWidth(label);
         // Angle per pixel along the radius.
         double degPerPx = Math.toDegrees(1.0 / r);
-        double angle = bottom ? mid + total / 2 * degPerPx : mid - total / 2 * degPerPx;
+        double angle = bottom ? a1 - 8 : a0 + 8;
         for (char ch : label.toCharArray()) {
             String s = String.valueOf(ch);
             double w = fm.stringWidth(s);

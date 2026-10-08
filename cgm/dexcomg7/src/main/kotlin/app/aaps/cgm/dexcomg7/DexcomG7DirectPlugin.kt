@@ -187,7 +187,7 @@ class DexcomG7DirectPlugin(
                 raw = null,
                 noise = null,
                 trendArrow = trendArrow(it.trend),
-                sourceSensor = SourceSensor.DEXCOM_G7_NATIVE
+                sourceSensor = SourceSensor.DEXCOM_G7
             )
         }
         runCatching { persistenceLayer.insertCgmSourceData(Sources.Dexcom, values, emptyList(), sensorStart) }

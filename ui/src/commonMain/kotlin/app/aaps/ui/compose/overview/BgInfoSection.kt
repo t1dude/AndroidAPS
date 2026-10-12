@@ -45,6 +45,7 @@ import kotlin.math.sin
  *   [LocalAapsScale] so the circle grows on tablets to match scaled typography. Pass an explicit
  *   value only if you want to override the tablet-aware default.
  * @param showTimeAgo Whether to render the small "time ago" line below the BG value.
+ * @param softColors Use the softer colors of the glucose circle watchface (Circle home screen).
  *
  * @see BgInfoSectionInRangePreview
  * @see BgInfoSectionHighPreview
@@ -57,7 +58,8 @@ fun BgInfoSection(
     timeAgoText: String,
     modifier: Modifier = Modifier,
     size: Dp = AapsSpacing.bgCircleSize * LocalAapsScale.current,
-    showTimeAgo: Boolean = true
+    showTimeAgo: Boolean = true,
+    softColors: Boolean = false
 ) {
     if (bgInfo == null) {
         // Show placeholder when no data
@@ -74,7 +76,7 @@ fun BgInfoSection(
         return
     }
 
-    val bgColor = bgInfo.bgRange.toColor()
+    val bgColor = if (softColors) bgInfo.bgRange.toSoftColor() else bgInfo.bgRange.toColor()
     val ringColor = bgColor.copy(alpha = 0.3f)
     val ringStrokeWidth = AapsSpacing.bgRingStrokeWidth * LocalAapsScale.current
 
@@ -206,6 +208,16 @@ private fun BgRange.toColor(): Color = when (this) {
     BgRange.HIGH     -> AapsTheme.generalColors.bgHigh
     BgRange.IN_RANGE -> AapsTheme.generalColors.bgInRange
     BgRange.LOW      -> AapsTheme.generalColors.bgLow
+}
+
+/**
+ * Maps BgRange to the softer colors of the glucose circle watchface.
+ */
+@Composable
+private fun BgRange.toSoftColor(): Color = when (this) {
+    BgRange.HIGH     -> AapsTheme.generalColors.circleWarning
+    BgRange.IN_RANGE -> AapsTheme.generalColors.circleNormal
+    BgRange.LOW      -> AapsTheme.generalColors.circleCritical
 }
 
 /**

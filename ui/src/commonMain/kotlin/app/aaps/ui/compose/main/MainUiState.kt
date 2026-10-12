@@ -25,6 +25,8 @@ enum class TempTargetChipState {
 data class MainUiState(
     val isDrawerOpen: Boolean = false,
     val isSimpleMode: Boolean = true,
+    /** Settings > Appearance > Home Screen Design is "Circle". */
+    val isCircleHomeScreen: Boolean = false,
     val isProfileLoaded: Boolean = false,
     val showAboutDialog: Boolean = false,
     val showMaintenanceSheet: Boolean = false,

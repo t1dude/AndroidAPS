@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.icons.IcSettingsOff
 import app.aaps.core.ui.compose.stringResource
 import app.aaps.ui.search.M3SearchBar
@@ -33,6 +34,7 @@ import app.aaps.ui.search.SearchUiState
  * @param onSearchClear Called when search query is cleared
  * @param onSearchActiveChange Called when search active state changes
  * @param isSimpleMode When true, shows a non-interactive simple-mode indicator next to Settings
+ * @param compactSearch When true, the search bar is lower (Circle home screen)
  * @param modifier Modifier for the component
  */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -45,6 +47,7 @@ fun MainTopBar(
     onSearchClear: () -> Unit,
     onSearchActiveChange: (Boolean) -> Unit,
     isSimpleMode: Boolean = false,
+    compactSearch: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -59,7 +62,8 @@ fun MainTopBar(
                     onQueryChange = onSearchQueryChange,
                     onClearClick = onSearchClear,
                     onActiveChange = onSearchActiveChange,
-                    modifier = Modifier.weight(1f)
+                    modifier = Modifier.weight(1f),
+                    height = if (compactSearch) AapsSpacing.homeSearchBarHeight else 48.dp
                 )
             }
         },

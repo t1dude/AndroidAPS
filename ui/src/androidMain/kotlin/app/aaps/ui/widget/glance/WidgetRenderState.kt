@@ -7,6 +7,8 @@ import app.aaps.core.data.model.TrendArrow
 data class WidgetRenderState(
     val bgText: String,
     @ColorInt val bgColor: Int,
+    /** BG color for the glucose circle widget: the soft watchface palette when the Circle home screen is chosen. */
+    @ColorInt val circleBgColor: Int,
     val strikeThrough: Boolean,
     @DrawableRes val arrowResId: Int?,
     /** Null without a reading. */

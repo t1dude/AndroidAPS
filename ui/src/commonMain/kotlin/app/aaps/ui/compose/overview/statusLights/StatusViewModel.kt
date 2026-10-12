@@ -11,9 +11,11 @@ import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.nsclient.ProcessedDeviceStatusData
 import app.aaps.core.interfaces.plugin.ActivePlugin
+import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.resources.TextResolver
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventAPSCalculationFinished
 import app.aaps.core.interfaces.rx.events.EventConfigBuilderChange
 import app.aaps.core.interfaces.rx.events.EventInitializationChanged
 import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
@@ -27,9 +29,11 @@ import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.StatusLevel
 import app.aaps.core.ui.compose.icons.IcCannulaChange
 import app.aaps.core.ui.compose.icons.IcCgmInsert
+import app.aaps.core.ui.compose.icons.IcGenericCgm
 import app.aaps.core.ui.compose.icons.IcPatchPump
 import app.aaps.core.ui.compose.icons.IcPumpBattery
 import app.aaps.core.ui.compose.icons.IcPumpCartridge
+import app.aaps.core.ui.compose.icons.Pump
 import app.aaps.core.ui.compose.pump.tickerFlow
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
@@ -89,6 +93,14 @@ class StatusViewModel(
             .flatMapLatest { visible -> if (visible) refreshTriggers() else emptyFlow() }
             .onEach { refreshState() }
             .launchIn(viewModelScope)
+        // Circle home screen: minutes since the last loop run, on every APS result and every minute,
+        // also only while a screen shows it
+        _uiState.subscriptionCount
+            .map { it > 0 }
+            .distinctUntilChanged()
+            .flatMapLatest { visible -> if (visible) merge(tickerFlow(60_000L), rxBus.toFlow(EventAPSCalculationFinished::class).map { }) else emptyFlow() }
+            .onEach { refreshLoop() }
+            .launchIn(viewModelScope)
     }
 
     private fun refreshTriggers(): Flow<Unit> = merge(
@@ -119,6 +131,20 @@ class StatusViewModel(
                 merge(pump.reservoirLevel.drop(1), pump.batteryLevel.drop(1)).map { }
             }
 
+    /** Minutes since the last loop run, for the Circle home screen. Cheap, so it runs on every APS result. */
+    fun refreshLoop() {
+        val lastRun = if (config.AAPSCLIENT) processedDeviceStatusData.openApsTimestamp
+        else activePlugin.activeAPS?.lastAPSRun ?: 0L
+        val minutesAgo = if (lastRun > 0) ((dateUtil.now() - lastRun) / 60_000L).toInt().coerceAtLeast(0) else null
+        val status = when {
+            minutesAgo == null                -> StatusLevel.UNSPECIFIED
+            minutesAgo <= LOOP_NORMAL_MINUTES -> StatusLevel.NORMAL
+            minutesAgo <= LOOP_WARN_MINUTES   -> StatusLevel.WARNING
+            else                              -> StatusLevel.CRITICAL
+        }
+        _uiState.update { it.copy(loopMinutesAgo = minutesAgo, loopStatus = status) }
+    }
+
     /** The refresh that is still running, if any. */
     private var refreshJob: Job? = null
 
@@ -145,6 +171,22 @@ class StatusViewModel(
                 buildBatteryStatus()
             } else null
 
+            // Circle home screen pills. On a client the local pump and sensor are not the real ones.
+            val pumpPlugin = activePlugin.activePumpInternal as? PluginBase
+            val bgSourcePlugin = activePlugin.activeBgSource as? PluginBase
+            val pumpTimeLeft = if (config.AAPSCLIENT) null else buildTimeLeft(
+                expiresAt = pump.expiresAt(),
+                startType = TE.Type.CANNULA_CHANGE,
+                warnKey = IntKey.OverviewCageWarning,
+                criticalKey = IntKey.OverviewCageCritical
+            )
+            val sensorTimeLeft = buildTimeLeft(
+                expiresAt = if (config.AAPSCLIENT) null else activePlugin.activeBgSource.sensorExpiresAt,
+                startType = TE.Type.SENSOR_CHANGE,
+                warnKey = IntKey.OverviewSageWarning,
+                criticalKey = IntKey.OverviewSageCritical
+            )
+
             _uiState.update { state ->
                 state.copy(
                     sensorStatus = sensorStatus,
@@ -160,7 +202,14 @@ class StatusViewModel(
                     batteryStatus = batteryStatus,
                     showFill = pumpDescription.isRefillingCapable && isInitialized,
                     showPumpBatteryChange = pumpDescription.isBatteryReplaceable || pump.isBatteryChangeLoggingEnabled(),
-                    isPatchPump = isPatchPump
+                    isPatchPump = isPatchPump,
+                    pumpIcon = pumpPlugin?.pluginDescription?.icon ?: Pump,
+                    pumpPluginClass = pumpPlugin?.let { it::class.simpleName },
+                    pumpTimeLeft = pumpTimeLeft,
+                    sensorIcon = bgSourcePlugin?.pluginDescription?.icon ?: IcGenericCgm,
+                    bgSourcePluginClass = bgSourcePlugin?.let { it::class.simpleName },
+                    sensorTimeLeft = sensorTimeLeft,
+                    apsPluginClass = (activePlugin.activeAPS as? PluginBase)?.let { it::class.simpleName }
                 )
             }
 
@@ -298,6 +347,32 @@ class StatusViewModel(
         )
     }
 
+    /**
+     * Time left on the pod, cannula or sensor. The device's own end time is used when it knows it.
+     * Otherwise the end is the last change plus the "critical age" status light setting.
+     * It turns amber in the last (critical - warning) hours, and red when the time is over.
+     */
+    private suspend fun buildTimeLeft(expiresAt: Long?, startType: TE.Type, warnKey: IntPreferenceKey, criticalKey: IntPreferenceKey): TimeLeftItem? {
+        val criticalHours = preferences.get(criticalKey)
+        val end = expiresAt ?: withContext(aapsIoDispatcher) {
+            persistenceLayer.getLastTherapyRecordUpToNow(startType)
+        }?.let { it.timestamp + criticalHours * HOUR_MS } ?: return null
+        val left = end - dateUtil.now()
+        val warnWindow = (criticalHours - preferences.get(warnKey)).coerceAtLeast(0) * HOUR_MS
+        val status = when {
+            left <= 0          -> StatusLevel.CRITICAL
+            left <= warnWindow -> StatusLevel.WARNING
+            else               -> StatusLevel.NORMAL
+        }
+        val minutes = left / 60_000L
+        val text = when {
+            left <= 0          -> rh.gs(CoreUiStrings.time_left_expired)
+            minutes >= 24 * 60 -> rh.gs(CoreUiStrings.time_left_days_hours, (minutes / (24 * 60)).toInt(), (minutes / 60 % 24).toInt())
+            else               -> rh.gs(CoreUiStrings.time_left_hours_minutes, (minutes / 60).toInt(), (minutes % 60).toInt())
+        }
+        return TimeLeftItem(text = text, status = status)
+    }
+
     private fun formatAge(timestamp: Long): String {
         val diff = dateUtil.computeDiff(timestamp, dateUtil.now())
         val days = diff.days
@@ -335,5 +410,14 @@ class StatusViewModel(
             level <= warn     -> StatusLevel.WARNING
             else              -> StatusLevel.NORMAL
         }
+    }
+
+    private companion object {
+
+        const val HOUR_MS = 60 * 60 * 1000L
+
+        /** The loop runs on every 5 minute reading, so up to 6 minutes is normal. */
+        const val LOOP_NORMAL_MINUTES = 6
+        const val LOOP_WARN_MINUTES = 10
     }
 }

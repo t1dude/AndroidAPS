@@ -16,4 +16,12 @@ interface BgSource {
      *  @return true if sensor has error and BG values should not be displayed
      */
     fun hasSensorError(): Boolean = false
+
+    /**
+     *  When the sensor session ends, in epoch millis
+     *
+     *  null if not known
+     */
+    val sensorExpiresAt: Long?
+        get() = null
 }

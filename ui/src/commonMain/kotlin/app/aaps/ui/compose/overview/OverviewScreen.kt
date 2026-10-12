@@ -66,6 +66,7 @@ fun OverviewScreen(
     tbrState: TbrState,
     smbEnabled: Boolean,
     isSimpleMode: Boolean,
+    isCircleHomeScreen: Boolean = false,
     calcProgress: Int,
     graphViewModel: GraphViewModel,
     chipsViewModel: ChipsViewModel,
@@ -138,7 +139,39 @@ fun OverviewScreen(
     val isTablet = smallestScreenWidthDp() >= TABLET_MIN_SW_DP && isLandscape
 
     Box(modifier = modifier.fillMaxSize()) {
-        if (isTablet) {
+        // The Circle design is used on every screen shape when chosen: portrait, landscape, tablet and an
+        // unfolded foldable (which Android reports as a landscape tablet). It is one scrolling column.
+        if (isCircleHomeScreen) {
+            OverviewScreenCircle(
+                profileName = profileName,
+                isProfileModified = isProfileModified,
+                profileProgress = profileProgress,
+                profileSceneManaged = profileSceneManaged,
+                tempTargetText = tempTargetText,
+                tempTargetState = tempTargetState,
+                tempTargetProgress = tempTargetProgress,
+                tempTargetReason = tempTargetReason,
+                tempTargetSceneManaged = tempTargetSceneManaged,
+                runningMode = runningMode,
+                runningModeText = runningModeText,
+                tbrState = tbrState,
+                isSimpleMode = isSimpleMode,
+                graphViewModel = graphViewModel,
+                chipsViewModel = chipsViewModel,
+                statusViewModel = statusViewModel,
+                onNavigate = onNavigate,
+                onTbrChipClick = onTbrChipClick,
+                onIobChipClick = onIobChipClick,
+                paddingValues = paddingValues,
+                activeSceneState = activeSceneState,
+                sceneExpired = sceneExpired,
+                onEndScene = onEndScene,
+                onDismissScene = onDismissScene,
+                endSceneEnabled = endSceneEnabled,
+                commandsAllowed = commandsAllowed,
+                formatDuration = formatDuration
+            )
+        } else if (isTablet) {
             OverviewScreenTablet(
                 profileName = profileName,
                 isProfileModified = isProfileModified,

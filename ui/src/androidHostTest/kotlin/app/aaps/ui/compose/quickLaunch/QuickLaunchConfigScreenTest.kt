@@ -3,6 +3,7 @@ package app.aaps.ui.compose.quickLaunch
 import android.content.Context
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasScrollToNodeAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.v2.createComposeRule
@@ -221,6 +222,8 @@ class QuickLaunchConfigScreenTest {
         viewModels.givenSelected(emptyList())
 
         setScreen()
+        // The list is lazy and the Menus section comes first; bring the row into the composed window.
+        compose.onNode(hasScrollToNodeAction()).performScrollToNode(hasContentDescription(addLabelFor("Bolus wizard")))
         // Found by the full label, so this also pins that a screen reader hears what is added.
         compose.onNodeWithContentDescription(addLabelFor("Bolus wizard")).performClick()
 

@@ -43,6 +43,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.aaps.core.data.configuration.Constants
@@ -54,6 +55,7 @@ import app.aaps.core.interfaces.overview.graph.SecondaryGraph
 import app.aaps.core.interfaces.overview.graph.SeriesType
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.LocalDateUtil
 import app.aaps.core.ui.compose.LocalDecimalFormatter
 import app.aaps.core.ui.compose.LocalProfileUtil
@@ -124,7 +126,25 @@ fun GraphsSection(
      * announcing them beside a past day would state something untrue about insulin.
      */
     iobText: String? = null,
-    cobText: String? = null
+    cobText: String? = null,
+    /** True shows the hour labels only under the last graph, not under every graph. */
+    timeLabelsOnLastGraphOnly: Boolean = false,
+    /** False hides the thin belt above the BG graph that shows running mode and therapy events. */
+    showTreatmentBelt: Boolean = true,
+    /** Part of the IOB graph height used by basal. */
+    iobGraphBasalFraction: Double = BASAL_HEIGHT_FRACTION,
+    /** False hides the "IOB / Basal" name in the corner of the IOB graph. */
+    showIobGraphLabel: Boolean = true,
+    horizontalPadding: Dp = 16.dp,
+    /** How many minutes the graphs show when opened, and after the reset on a new reading. */
+    defaultVisibleMinutes: Double = DEFAULT_GRAPH_ZOOM_MINUTES,
+    /** Drawn behind the graphs only, not behind the Add graph button (Circle home screen panel). */
+    graphsBackground: Modifier = Modifier,
+    /**
+     * Circle home screen look: BG in the soft watchface colors with thin target range lines, lighter
+     * axes on every graph, and a softer IOB fill.
+     */
+    circleStyle: Boolean = false
 ) {
     val dateUtil = LocalDateUtil.current
     val savedGraphConfig by graphViewModel.graphConfigFlow.collectAsStateWithLifecycle()
@@ -136,7 +156,7 @@ fun GraphsSection(
     // by reference, so passing a freshly-allocated Zoom on every recomposition of this composable
     // tears down and recreates the VicoZoomState — resetting the zoom level back to initialZoom.
     // Memoize these once so all zoom states below stay stable across recompositions.
-    val defaultZoom = remember { Zoom.x(DEFAULT_GRAPH_ZOOM_MINUTES) }
+    val defaultZoom = remember(defaultVisibleMinutes) { Zoom.x(defaultVisibleMinutes) }
     val bgMinZoom = remember { Zoom.x(Constants.GRAPH_TIME_RANGE_HOURS * 60.0) }
     val bgMaxZoom = remember { Zoom.x(MIN_GRAPH_ZOOM_MINUTES) }
 
@@ -329,7 +349,8 @@ fun GraphsSection(
             // Only read states that are attached to a chart (belt + IOB fixed + active secondary)
             val count = activeCount
             buildList {
-                add(beltScrollState.value to beltZoomState.value)
+                // A belt that is not drawn never moves, so it would always look out of sync.
+                if (showTreatmentBelt) add(beltScrollState.value to beltZoomState.value)
                 add(iobScrollState.value to iobZoomState.value)
                 for (i in 0 until count) {
                     add(secScrollStates[i].value to secZoomStates[i].value)
@@ -358,273 +379,294 @@ fun GraphsSection(
     }
 
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        // Treatment Belt Graph - running mode background + therapy events
-        TreatmentBeltGraphCompose(
-            viewModel = graphViewModel,
-            scrollState = beltScrollState,
-            zoomState = beltZoomState,
-            derivedTimeRange = derivedTimeRange,
-            nowTimestamp = nowTimestamp,
-            modifier = Modifier.fillMaxWidth()
-        )
-        // BG Graph - primary interactive graph
-        var editingBgOverlays by remember { mutableStateOf(false) }
-
-        // The graph is drawn, so a screen reader gets nothing from it at all - a chart contributes
-        // no semantics node of its own. Describe it instead: the recent readings newest first,
-        // because the current value is what matters most and a listener may stop there, plus what
-        // is on board. The description goes on the graph itself rather than the Box, so the edit
-        // button beside it stays a separate control.
-        val bgReadings by graphViewModel.bgReadingsFlow.collectAsStateWithLifecycle()
-        val profileUtil = LocalProfileUtil.current
-        val decimalFormatter = LocalDecimalFormatter.current
-        val recentValues = remember(bgReadings, profileUtil.units) {
-            // BgDataPoint.value is ALREADY in the user's units, so it must not be converted again -
-            // only formatted. The unit decides the decimals; the "detect" helpers guess that from
-            // the magnitude and would read a very high mmol/l reading as mg/dl.
-            newestReadings(bgReadings, RECENT_VALUES_SPOKEN)
-                .joinToString(", ") {
-                    if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(it.value)
-                    else decimalFormatter.to1Decimal(it.value)
-                }
-        }
-        val graphDescription = when {
-            recentValues.isEmpty()                 -> null
-            iobText != null && cobText != null     -> stringResource(
-                UiStrings.a11y_bg_graph_summary,
-                recentValues,
-                stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.iob), iobText),
-                stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.cob), cobText)
-            )
-
-            else                                   -> stringResource(UiStrings.a11y_bg_graph_summary_values_only, recentValues)
-        }
-
-        Box(modifier = Modifier.offset(y = (-16).dp)) {
-            BgGraphCompose(
-                viewModel = graphViewModel,
-                bgOverlays = graphConfig.bgOverlays,
-                scrollState = bgScrollState,
-                zoomState = bgZoomState,
-                derivedTimeRange = derivedTimeRange,
-                nowTimestamp = nowTimestamp,
-                visibleTimeRange = bgVisibleTimeRange,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(graphConfig.bgHeight.dp)
-                    .onScrollOrZoomGesture(graphViewModel::onGraphInteraction)
-                    .then(
-                        if (graphDescription != null) Modifier.semantics { contentDescription = graphDescription }
-                        else Modifier
-                    )
-            )
-            if (!isSimpleMode) {
-                GraphEditButton(
-                    onClick = { editingBgOverlays = true },
-                    graphName = stringResource(CoreUiStrings.glucose),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 4.dp, top = 2.dp)
-                )
-            }
-        }
-        if (editingBgOverlays) {
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.graph_bg),
-                selectedSeries = graphConfig.bgOverlays,
-                availableSeries = BG_OVERLAY_SERIES,
-                height = graphConfig.bgHeight,
-                onHeightChange = { h ->
-                    graphViewModel.updateGraphConfig(graphConfig.copy(bgHeight = h))
-                },
-                onToggle = { type ->
-                    val current = graphConfig.bgOverlays.toMutableList()
-                    if (type in current) current.remove(type) else current.add(type)
-                    graphViewModel.updateGraphConfig(graphConfig.copy(bgOverlays = current))
-                },
-                onDismiss = { editingBgOverlays = false }
-            )
-        }
-        // Fixed IOB graph (Graph 1) with optional Activity overlay
-        var editingIobOverlays by remember { mutableStateOf(false) }
-        Box(modifier = Modifier.offset(y = (-8).dp)) {
-            SecondaryGraphCompose(
-                viewModel = graphViewModel,
-                seriesTypes = listOf(SeriesType.IOB),
-                scrollState = iobScrollState,
-                zoomState = iobZoomState,
-                derivedTimeRange = derivedTimeRange,
-                nowTimestamp = nowTimestamp,
-                activityOverlay = SeriesType.ACTIVITY in graphConfig.iobOverlays,
-                onVisibleRangeChanged = { iobVisibleRange = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(graphConfig.iobHeight.dp)
-            )
-            Text(
-                text = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(start = 36.dp, top = 2.dp)
-            )
-            if (!isSimpleMode) {
-                GraphEditButton(
-                    onClick = { editingIobOverlays = true },
-                    graphName = stringResource(CoreUiStrings.iob),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 4.dp, top = 2.dp)
-                )
-            }
-        }
-        if (editingIobOverlays) {
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
-                selectedSeries = graphConfig.iobOverlays,
-                availableSeries = listOf(SeriesType.ACTIVITY),
-                height = graphConfig.iobHeight,
-                onHeightChange = { h ->
-                    graphViewModel.updateGraphConfig(graphConfig.copy(iobHeight = h))
-                },
-                onToggle = { type ->
-                    val current = graphConfig.iobOverlays.toMutableList()
-                    if (type in current) current.remove(type) else current.add(type)
-                    graphViewModel.updateGraphConfig(graphConfig.copy(iobOverlays = current))
-                },
-                onDismiss = { editingIobOverlays = false }
-            )
-        }
-
-        // Secondary graphs — config-driven (labels start at "Graph 2")
-        var editingGraphIndex by remember { mutableIntStateOf(-1) }
-        for (i in 0 until activeCount) {
-            val secondary = graphConfig.secondaryGraphs[i]
-            Box(modifier = Modifier.offset(y = (-8).dp)) {
-                SecondaryGraphCompose(
+    Column(modifier = modifier.fillMaxWidth()) {
+        // The graphs only: graphsBackground goes behind them and not behind the Add button below
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .then(graphsBackground)
+                .padding(horizontal = horizontalPadding, vertical = 8.dp)
+        ) {
+            // Treatment Belt Graph - running mode background + therapy events
+            if (showTreatmentBelt) {
+                TreatmentBeltGraphCompose(
                     viewModel = graphViewModel,
-                    seriesTypes = secondary.series,
-                    scrollState = secScrollStates[i],
-                    zoomState = secZoomStates[i],
+                    scrollState = beltScrollState,
+                    zoomState = beltZoomState,
                     derivedTimeRange = derivedTimeRange,
                     nowTimestamp = nowTimestamp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            // BG Graph - primary interactive graph
+            var editingBgOverlays by remember { mutableStateOf(false) }
+
+            // The graph is drawn, so a screen reader gets nothing from it at all - a chart contributes
+            // no semantics node of its own. Describe it instead: the recent readings newest first,
+            // because the current value is what matters most and a listener may stop there, plus what
+            // is on board. The description goes on the graph itself rather than the Box, so the edit
+            // button beside it stays a separate control.
+            val bgReadings by graphViewModel.bgReadingsFlow.collectAsStateWithLifecycle()
+            val profileUtil = LocalProfileUtil.current
+            val decimalFormatter = LocalDecimalFormatter.current
+            val recentValues = remember(bgReadings, profileUtil.units) {
+                // BgDataPoint.value is ALREADY in the user's units, so it must not be converted again -
+                // only formatted. The unit decides the decimals; the "detect" helpers guess that from
+                // the magnitude and would read a very high mmol/l reading as mg/dl.
+                newestReadings(bgReadings, RECENT_VALUES_SPOKEN)
+                    .joinToString(", ") {
+                        if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(it.value)
+                        else decimalFormatter.to1Decimal(it.value)
+                    }
+            }
+            val graphDescription = when {
+                recentValues.isEmpty()                 -> null
+                iobText != null && cobText != null     -> stringResource(
+                    UiStrings.a11y_bg_graph_summary,
+                    recentValues,
+                    stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.iob), iobText),
+                    stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.cob), cobText)
+                )
+
+                else                                   -> stringResource(UiStrings.a11y_bg_graph_summary_values_only, recentValues)
+            }
+
+            Box(modifier = Modifier.offset(y = if (showTreatmentBelt) (-16).dp else 0.dp)) {
+                BgGraphCompose(
+                    viewModel = graphViewModel,
+                    bgOverlays = graphConfig.bgOverlays,
+                    scrollState = bgScrollState,
+                    zoomState = bgZoomState,
+                    derivedTimeRange = derivedTimeRange,
+                    nowTimestamp = nowTimestamp,
+                    visibleTimeRange = bgVisibleTimeRange,
+                    showTimeLabels = !timeLabelsOnLastGraphOnly,
+                    softColors = circleStyle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(secondary.height.dp)
-                )
-                Text(
-                    text = seriesListLabel(secondary.series),
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(start = 36.dp, top = 2.dp)
+                        .height(graphConfig.bgHeight.dp)
+                        .onScrollOrZoomGesture(graphViewModel::onGraphInteraction)
+                        .then(
+                            if (graphDescription != null) Modifier.semantics { contentDescription = graphDescription }
+                            else Modifier
+                        )
                 )
                 if (!isSimpleMode) {
                     GraphEditButton(
-                        onClick = { editingGraphIndex = i },
-                        graphName = seriesListLabel(secondary.series),
+                        onClick = { editingBgOverlays = true },
+                        graphName = stringResource(CoreUiStrings.glucose),
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(end = 4.dp, top = 2.dp)
                     )
                 }
             }
-        }
-        if (editingGraphIndex >= 0 && editingGraphIndex < activeCount) {
-            // Read once. The lambdas below can run after the sheet has closed and the index is
-            // already -1: NumberInputRow saves a focused field when it leaves the screen.
-            val index = editingGraphIndex
-            val editing = graphConfig.secondaryGraphs[index]
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.graph_number, index + 2),
-                selectedSeries = editing.series,
-                availableSeries = CONFIGURABLE_SERIES,
-                height = editing.height,
-                onHeightChange = { h ->
-                    // The current config, not the captured one: after "Remove graph" the captured
-                    // config still holds the removed graph, and writing it back would restore it.
-                    withSecondaryGraphHeight(graphViewModel.graphConfigFlow.value, index, editing.series, h)
-                        ?.let { graphViewModel.updateGraphConfig(it) }
-                },
-                onToggle = { type ->
-                    val graphs = graphConfig.secondaryGraphs.toMutableList()
-                    val current = graphs[index].series.toMutableList()
-                    if (type in current) {
-                        current.remove(type)
-                    } else {
-                        current.add(type)
-                        if (current.size > 2) current.removeAt(0) // FIFO: drop oldest
-                    }
-                    if (current.isEmpty()) {
-                        // Auto-remove graph when all series deselected
-                        graphs.removeAt(index)
-                        editingGraphIndex = -1
-                    } else {
-                        graphs[index] = graphs[index].copy(series = current)
-                    }
-                    graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                },
-                onRemoveGraph = {
-                    val graphs = graphConfig.secondaryGraphs.toMutableList()
-                    graphs.removeAt(index)
-                    editingGraphIndex = -1
-                    graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                },
-                onDismiss = { editingGraphIndex = -1 }
-            )
-        }
-        // Add graph button (hidden in simple mode)
-        if (!isSimpleMode && activeCount < GraphConfig.MAX_SECONDARY_GRAPHS) {
-            var showAddSheet by remember { mutableStateOf(false) }
-            TextButton(
-                onClick = { showAddSheet = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(CoreUiStrings.graph_add), style = MaterialTheme.typography.labelMedium)
-            }
-            if (showAddSheet) {
-                var newGraphSeries by remember { mutableStateOf(emptyList<SeriesType>()) }
-                var newGraphHeight by remember { mutableIntStateOf(GraphConfig.DEFAULT_GRAPH_HEIGHT_DP) }
+            if (editingBgOverlays) {
                 GraphSeriesBottomSheet(
-                    title = stringResource(CoreUiStrings.graph_new),
-                    selectedSeries = newGraphSeries,
-                    availableSeries = CONFIGURABLE_SERIES,
-                    height = newGraphHeight,
-                    onHeightChange = { newGraphHeight = it },
+                    title = stringResource(CoreUiStrings.graph_bg),
+                    selectedSeries = graphConfig.bgOverlays,
+                    availableSeries = BG_OVERLAY_SERIES,
+                    height = graphConfig.bgHeight,
+                    onHeightChange = { h ->
+                        graphViewModel.updateGraphConfig(graphConfig.copy(bgHeight = h))
+                    },
                     onToggle = { type ->
-                        val current = newGraphSeries.toMutableList()
+                        val current = graphConfig.bgOverlays.toMutableList()
+                        if (type in current) current.remove(type) else current.add(type)
+                        graphViewModel.updateGraphConfig(graphConfig.copy(bgOverlays = current))
+                    },
+                    onDismiss = { editingBgOverlays = false }
+                )
+            }
+            // Fixed IOB graph (Graph 1) with optional Activity overlay
+            var editingIobOverlays by remember { mutableStateOf(false) }
+            // Circle style: a small gap between the graphs instead of pulling them together
+            if (circleStyle) Spacer(Modifier.height(AapsSpacing.medium))
+            Box(modifier = Modifier.offset(y = if (circleStyle) 0.dp else (-8).dp)) {
+                SecondaryGraphCompose(
+                    viewModel = graphViewModel,
+                    seriesTypes = listOf(SeriesType.IOB),
+                    scrollState = iobScrollState,
+                    zoomState = iobZoomState,
+                    derivedTimeRange = derivedTimeRange,
+                    nowTimestamp = nowTimestamp,
+                    activityOverlay = SeriesType.ACTIVITY in graphConfig.iobOverlays,
+                    onVisibleRangeChanged = { iobVisibleRange = it },
+                    showTimeLabels = !timeLabelsOnLastGraphOnly || activeCount == 0,
+                    basalHeightFraction = iobGraphBasalFraction,
+                    softStyle = circleStyle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(graphConfig.iobHeight.dp)
+                )
+                if (showIobGraphLabel) {
+                    Text(
+                        text = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 36.dp, top = 2.dp)
+                    )
+                }
+                if (!isSimpleMode) {
+                    GraphEditButton(
+                        onClick = { editingIobOverlays = true },
+                        graphName = stringResource(CoreUiStrings.iob),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 4.dp, top = 2.dp)
+                    )
+                }
+            }
+            if (editingIobOverlays) {
+                GraphSeriesBottomSheet(
+                    title = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
+                    selectedSeries = graphConfig.iobOverlays,
+                    availableSeries = listOf(SeriesType.ACTIVITY),
+                    height = graphConfig.iobHeight,
+                    onHeightChange = { h ->
+                        graphViewModel.updateGraphConfig(graphConfig.copy(iobHeight = h))
+                    },
+                    onToggle = { type ->
+                        val current = graphConfig.iobOverlays.toMutableList()
+                        if (type in current) current.remove(type) else current.add(type)
+                        graphViewModel.updateGraphConfig(graphConfig.copy(iobOverlays = current))
+                    },
+                    onDismiss = { editingIobOverlays = false }
+                )
+            }
+
+            // Secondary graphs — config-driven (labels start at "Graph 2")
+            var editingGraphIndex by remember { mutableIntStateOf(-1) }
+            for (i in 0 until activeCount) {
+                val secondary = graphConfig.secondaryGraphs[i]
+                // Circle style: a small gap between the graphs instead of pulling them together
+                if (circleStyle) Spacer(Modifier.height(AapsSpacing.medium))
+                Box(modifier = Modifier.offset(y = if (circleStyle) 0.dp else (-8).dp)) {
+                    SecondaryGraphCompose(
+                        viewModel = graphViewModel,
+                        seriesTypes = secondary.series,
+                        scrollState = secScrollStates[i],
+                        zoomState = secZoomStates[i],
+                        derivedTimeRange = derivedTimeRange,
+                        nowTimestamp = nowTimestamp,
+                        showTimeLabels = !timeLabelsOnLastGraphOnly || i == activeCount - 1,
+                        softStyle = circleStyle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(secondary.height.dp)
+                    )
+                    Text(
+                        text = seriesListLabel(secondary.series),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(start = 36.dp, top = 2.dp)
+                    )
+                    if (!isSimpleMode) {
+                        GraphEditButton(
+                            onClick = { editingGraphIndex = i },
+                            graphName = seriesListLabel(secondary.series),
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(end = 4.dp, top = 2.dp)
+                        )
+                    }
+                }
+            }
+            if (editingGraphIndex >= 0 && editingGraphIndex < activeCount) {
+                // Read once. The lambdas below can run after the sheet has closed and the index is
+                // already -1: NumberInputRow saves a focused field when it leaves the screen.
+                val index = editingGraphIndex
+                val editing = graphConfig.secondaryGraphs[index]
+                GraphSeriesBottomSheet(
+                    title = stringResource(CoreUiStrings.graph_number, index + 2),
+                    selectedSeries = editing.series,
+                    availableSeries = CONFIGURABLE_SERIES,
+                    height = editing.height,
+                    onHeightChange = { h ->
+                        // The current config, not the captured one: after "Remove graph" the captured
+                        // config still holds the removed graph, and writing it back would restore it.
+                        withSecondaryGraphHeight(graphViewModel.graphConfigFlow.value, index, editing.series, h)
+                            ?.let { graphViewModel.updateGraphConfig(it) }
+                    },
+                    onToggle = { type ->
+                        val graphs = graphConfig.secondaryGraphs.toMutableList()
+                        val current = graphs[index].series.toMutableList()
                         if (type in current) {
                             current.remove(type)
                         } else {
                             current.add(type)
-                            if (current.size > 2) current.removeAt(0)
+                            if (current.size > 2) current.removeAt(0) // FIFO: drop oldest
                         }
-                        newGraphSeries = current
+                        if (current.isEmpty()) {
+                            // Auto-remove graph when all series deselected
+                            graphs.removeAt(index)
+                            editingGraphIndex = -1
+                        } else {
+                            graphs[index] = graphs[index].copy(series = current)
+                        }
+                        graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
                     },
-                    onDismiss = {
-                        if (newGraphSeries.isNotEmpty()) {
-                            val graphs = graphConfig.secondaryGraphs.toMutableList()
-                            graphs.add(SecondaryGraph(newGraphSeries, newGraphHeight))
-                            graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                        }
-                        newGraphSeries = emptyList()
-                        newGraphHeight = GraphConfig.DEFAULT_GRAPH_HEIGHT_DP
-                        showAddSheet = false
-                    }
+                    onRemoveGraph = {
+                        val graphs = graphConfig.secondaryGraphs.toMutableList()
+                        graphs.removeAt(index)
+                        editingGraphIndex = -1
+                        graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
+                    },
+                    onDismiss = { editingGraphIndex = -1 }
                 )
             }
         }
-        // Spacer so the last graph / Add button isn't covered by QuickLaunch toolbar
-        Spacer(Modifier.height(48.dp))
+        Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+            // Add graph button (hidden in simple mode)
+            if (!isSimpleMode && activeCount < GraphConfig.MAX_SECONDARY_GRAPHS) {
+                var showAddSheet by remember { mutableStateOf(false) }
+                TextButton(
+                    onClick = { showAddSheet = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(CoreUiStrings.graph_add), style = MaterialTheme.typography.labelMedium)
+                }
+                if (showAddSheet) {
+                    var newGraphSeries by remember { mutableStateOf(emptyList<SeriesType>()) }
+                    var newGraphHeight by remember { mutableIntStateOf(GraphConfig.DEFAULT_GRAPH_HEIGHT_DP) }
+                    GraphSeriesBottomSheet(
+                        title = stringResource(CoreUiStrings.graph_new),
+                        selectedSeries = newGraphSeries,
+                        availableSeries = CONFIGURABLE_SERIES,
+                        height = newGraphHeight,
+                        onHeightChange = { newGraphHeight = it },
+                        onToggle = { type ->
+                            val current = newGraphSeries.toMutableList()
+                            if (type in current) {
+                                current.remove(type)
+                            } else {
+                                current.add(type)
+                                if (current.size > 2) current.removeAt(0)
+                            }
+                            newGraphSeries = current
+                        },
+                        onDismiss = {
+                            if (newGraphSeries.isNotEmpty()) {
+                                val graphs = graphConfig.secondaryGraphs.toMutableList()
+                                graphs.add(SecondaryGraph(newGraphSeries, newGraphHeight))
+                                graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
+                            }
+                            newGraphSeries = emptyList()
+                            newGraphHeight = GraphConfig.DEFAULT_GRAPH_HEIGHT_DP
+                            showAddSheet = false
+                        }
+                    )
+                }
+            }
+            // Spacer so the last graph / Add button isn't covered by QuickLaunch toolbar
+            Spacer(Modifier.height(48.dp))
+        }
     }
 }
 
@@ -688,7 +730,7 @@ private fun seriesShortNameId(type: SeriesType): TextRef = when (type) {
 
 /** Small pencil icon button overlaid on a graph */
 @Composable
-private fun GraphEditButton(
+internal fun GraphEditButton(
     onClick: () -> Unit,
     graphName: String,
     modifier: Modifier = Modifier

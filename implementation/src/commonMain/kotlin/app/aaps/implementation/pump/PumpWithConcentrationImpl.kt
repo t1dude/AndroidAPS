@@ -93,6 +93,7 @@ class PumpWithConcentrationImpl(
     override fun setNeutralTempAtFullHour(): Boolean = activePumpInternal.setNeutralTempAtFullHour()
     override fun isBatteryChangeLoggingEnabled(): Boolean = activePumpInternal.isBatteryChangeLoggingEnabled()
     override fun isUseRileyLinkBatteryLevel(): Boolean = activePumpInternal.isUseRileyLinkBatteryLevel()
+    override fun expiresAt(): Long? = activePumpInternal.expiresAt()
     override fun finishHandshaking() {
         activePumpInternal.finishHandshaking()
     }

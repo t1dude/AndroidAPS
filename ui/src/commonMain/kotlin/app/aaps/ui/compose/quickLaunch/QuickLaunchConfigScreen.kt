@@ -170,6 +170,20 @@ fun QuickLauchConfigScreen(
                 }
             }
 
+            // ── Available: Menus ── (the home screen bottom sheets)
+            val menuItems = state.availableStaticItems.filter { it.action is QuickLaunchAction.SheetAction }
+            if (menuItems.isNotEmpty()) {
+                item(key = "divider_menus") {
+                    HorizontalDivider()
+                }
+                item(key = "header_menus") {
+                    SectionHeader(stringResource(UiStrings.quick_launch_category_menus))
+                }
+                items(menuItems, key = { "avail_${it.action.typeId}" }) { item ->
+                    AvailableActionItem(item = item, onAdd = { viewModel.addAction(item.action) }, modifier = Modifier.animateItem())
+                }
+            }
+
             // ── Available: Treatment ── (whole section hidden when empty — e.g. all visibility-filtered on a client)
             val treatmentItems = state.availableStaticItems.filter {
                 it.action.elementType?.category in setOf(ElementCategory.TREATMENT, ElementCategory.CGM)

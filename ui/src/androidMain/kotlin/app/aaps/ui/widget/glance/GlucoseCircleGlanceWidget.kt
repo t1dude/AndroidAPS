@@ -57,7 +57,7 @@ private fun GlucoseCircleContent(state: WidgetRenderState) {
     val sidePx = (minOf(size.width.value, size.height.value) * density).toInt().coerceAtLeast(1)
     val input = GlucoseCircleInput(
         bgText = state.bgText,
-        bgColor = state.bgColor,
+        bgColor = state.circleBgColor,
         strikeThrough = state.strikeThrough,
         trendArrow = state.trendArrow,
         hasBg = state.arrowResId != null,

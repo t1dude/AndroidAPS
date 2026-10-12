@@ -999,6 +999,9 @@
     <string name="from_label">From</string>
     <string name="to_label">To</string>
     <string name="sensor_label">Sensor</string>
+    <string name="time_left_days_hours" comment="Time left on a pod, cannula or sensor. %1$d=days, %2$d=hours. Example: 2d 14h">%1$dd %2$dh</string>
+    <string name="time_left_hours_minutes" comment="Time left on a pod, cannula or sensor. %1$d=hours, %2$d=minutes. Example: 5h 20m">%1$dh %2$dm</string>
+    <string name="time_left_expired" comment="Short text on a small home screen pill: the pod, cannula or sensor time is over">Expired</string>
     <string name="insulin_label">Insulin</string>
     <string name="pb_label">Pump battery</string>
     <string name="cannula">Cannula</string>

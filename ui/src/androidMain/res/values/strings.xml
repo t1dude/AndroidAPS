@@ -314,6 +314,9 @@
     <string name="quick_launch_category_menus">Menus</string>
     <string name="temp_target_list">Temporary Target List</string>
     <string name="circle_chips_title">Buttons under the circle</string>
+    <string name="graph_inspect_items_title">Shown when you hold the BG graph</string>
+    <string name="graph_inspect_treatments">Bolus, SMB and carbs</string>
+    <string name="graph_inspect_smb" comment="A super micro bolus in the BG graph pop-up. %1$s=amount with unit. Example: SMB 0.40 U">SMB %1$s</string>
     <string name="temp_target_list_summary" comment="One temp target preset in the list. %1$s=target with unit, %2$s=duration. Example: 8.0 mmol/l for 1 h">%1$s for %2$s</string>
     <string name="quick_launch_category_treatment">Treatment</string>
     <string name="quick_launch_category_care">Care Portal</string>

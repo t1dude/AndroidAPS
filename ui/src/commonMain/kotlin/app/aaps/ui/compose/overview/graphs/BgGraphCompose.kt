@@ -38,6 +38,7 @@ import com.patrykandpatrick.vico.compose.cartesian.data.CartesianChartModelProdu
 import com.patrykandpatrick.vico.compose.cartesian.data.CartesianLayerRangeProvider
 import com.patrykandpatrick.vico.compose.cartesian.data.lineModel
 import com.patrykandpatrick.vico.compose.cartesian.decoration.HorizontalBox
+import com.patrykandpatrick.vico.compose.cartesian.marker.CartesianMarkerController
 import com.patrykandpatrick.vico.compose.cartesian.decoration.HorizontalLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.LineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
@@ -127,6 +128,8 @@ fun BgGraphCompose(
      * lines (high mark amber, low mark red) instead of a green band, and the lighter axis style.
      */
     softColors: Boolean = false,
+    /** Press and hold to see the values at a reading. Null turns it off. */
+    inspect: GraphInspectState? = null,
     modifier: Modifier = Modifier
 ) {
     val dateUtil = LocalDateUtil.current
@@ -599,6 +602,9 @@ fun BgGraphCompose(
         )
     }
 
+    val inspectLineColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+    val inspectMarker = remember(inspect, inspectLineColor) { inspect?.let { GraphInspectMarker(it, inspectLineColor) } }
+
     val decorations = remember(softColors, inRangeBox, highMarkLine, lowMarkLine, nowLine) {
         if (softColors) listOf(highMarkLine, lowMarkLine, nowLine) else listOf(inRangeBox, nowLine)
     }
@@ -679,7 +685,10 @@ fun BgGraphCompose(
                 guideline = xGuideline
             ),
             decorations = decorations,
-            getXStep = { _, _, _ -> 1.0 }
+            getXStep = { _, _, _ -> 1.0 },
+            marker = inspectMarker,
+            markerVisibilityListener = inspect?.visibilityListener,
+            markerController = inspect?.controller ?: CartesianMarkerController.rememberShowOnPress()
         ),
         modelProducer = modelProducer,
         modifier = modifier.fillMaxWidth(),

@@ -1,5 +1,6 @@
 package app.aaps.ui.compose.overview.graphs
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
@@ -238,31 +239,35 @@ fun inspectDataAt(
 private fun <T> List<T>.nearest(timestamp: Long, time: (T) -> Long): T? =
     minByOrNull { abs(time(it) - timestamp) }?.takeIf { abs(time(it) - timestamp) <= INSPECT_MATCH_MS }
 
-/** BG range to the BG color of the graph. */
+/** BG range to the BG color of the graph. [soft] = the Circle home screen palette. */
 @Composable
-internal fun BgRange.inspectColor(): Color = when (this) {
-    BgRange.HIGH     -> AapsTheme.generalColors.bgHigh
-    BgRange.IN_RANGE -> AapsTheme.generalColors.bgInRange
-    BgRange.LOW      -> AapsTheme.generalColors.bgLow
+internal fun BgRange.inspectColor(soft: Boolean = false): Color = when (this) {
+    BgRange.HIGH     -> if (soft) AapsTheme.generalColors.circleWarning else AapsTheme.generalColors.bgHigh
+    BgRange.IN_RANGE -> if (soft) AapsTheme.generalColors.circleNormal else AapsTheme.generalColors.bgInRange
+    BgRange.LOW      -> if (soft) AapsTheme.generalColors.circleCritical else AapsTheme.generalColors.bgLow
 }
 
 /**
  * The pill with the values at the inspected time. [onEdit] opens the switches for what is shown.
+ * [circleStyle] gives it the Circle home screen look: soft glucose colors and the panel surface.
  */
 @Composable
 fun GraphInspectPill(
     data: InspectData,
     hidden: Set<InspectItem>,
     onEdit: () -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    circleStyle: Boolean = false
 ) {
     val dateUtil = LocalDateUtil.current
     val profileUtil = LocalProfileUtil.current
     val decimalFormatter = LocalDecimalFormatter.current
     Surface(
         shape = RoundedCornerShape(percent = 50),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
+        color = if (circleStyle) MaterialTheme.colorScheme.surfaceContainerLow.copy(alpha = 0.95f)
+        else MaterialTheme.colorScheme.surfaceContainerHigh.copy(alpha = 0.95f),
         shadowElevation = 2.dp,
+        border = if (circleStyle) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
         modifier = modifier
     ) {
         Row(
@@ -277,7 +282,7 @@ fun GraphInspectPill(
                 PillText(dateUtil.timeString(data.timestamp), MaterialTheme.colorScheme.onSurfaceVariant)
                 data.bg?.let { bg ->
                     val text = if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(bg.value) else decimalFormatter.to1Decimal(bg.value)
-                    PillText(text, bg.range.inspectColor())
+                    PillText(text, bg.range.inspectColor(soft = circleStyle))
                 }
                 if (InspectItem.IOB !in hidden) data.iob?.let {
                     PillItem(ElementType.INSULIN.icon(), stringResource(InterfacesStrings.format_insulin_units, it), ElementType.INSULIN.color())

@@ -482,7 +482,7 @@ fun GraphsSection(
                     inspectData = null
                 }
             }
-            val inspectDotColor = inspectData?.bg?.range?.inspectColor() ?: Color.Unspecified
+            val inspectDotColor = inspectData?.bg?.range?.inspectColor(soft = circleStyle) ?: Color.Unspecified
             SideEffect { inspect.dotColor = inspectDotColor }
 
             Box(
@@ -524,6 +524,7 @@ fun GraphsSection(
                         data = data,
                         hidden = inspectHidden,
                         onEdit = { editingInspect = true },
+                        circleStyle = circleStyle,
                         modifier = Modifier
                             .align(Alignment.TopCenter)
                             .padding(top = 2.dp, start = 36.dp, end = 36.dp)

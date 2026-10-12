@@ -602,13 +602,11 @@ fun BgGraphCompose(
         )
     }
 
-    // The Circle home screen draws the line in its lavender accent
-    val inspectLineColor = if (softColors) AapsTheme.generalColors.circleAccent.copy(alpha = 0.8f)
-    else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-    val inspectMarker = remember(inspect, inspectLineColor) { inspect?.let { GraphInspectMarker(it, inspectLineColor) } }
+    val inspectMarker = remember(inspect) { inspect?.let { GraphInspectMarker(it) } }
+    val inspectLine = rememberInspectLine(inspect, soft = softColors)
 
-    val decorations = remember(softColors, inRangeBox, highMarkLine, lowMarkLine, nowLine) {
-        if (softColors) listOf(highMarkLine, lowMarkLine, nowLine) else listOf(inRangeBox, nowLine)
+    val decorations = remember(softColors, inRangeBox, highMarkLine, lowMarkLine, nowLine, inspectLine) {
+        if (softColors) listOfNotNull(highMarkLine, lowMarkLine, nowLine, inspectLine) else listOfNotNull(inRangeBox, nowLine, inspectLine)
     }
 
     // =========================================================================

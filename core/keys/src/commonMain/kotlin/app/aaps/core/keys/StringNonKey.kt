@@ -72,8 +72,6 @@ enum class StringNonKey(
     ComposeGraphConfig("compose_graphconfig", ""),
     /** Order and visibility of the chips on the Circle home screen, for example "iob,cob,!sens". Empty = all, default order. */
     OverviewCircleChips("circle_home_chips", ""),
-    /** Values hidden in the pop-up when holding the BG graph, for example "cob,basal". Empty = all shown. */
-    GraphInspectHidden("graph_inspect_hidden", ""),
 
     // Synthetic mirror of the active plugin per single-select category (value = plugin pluginId, defaults to
     // javaClass.simpleName). Bidirectional for APS/SENSITIVITY/SMOOTHING/CALIBRATION (a client may switch the

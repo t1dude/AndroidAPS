@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -17,9 +18,11 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.aaps.core.data.model.TrendArrow
@@ -46,6 +49,8 @@ import kotlin.math.sin
  *   value only if you want to override the tablet-aware default.
  * @param showTimeAgo Whether to render the small "time ago" line below the BG value.
  * @param softColors Use the softer colors of the glucose circle watchface (Circle home screen).
+ * @param textReferenceSize The circle size the text is made for. When set, the text inside scales
+ *   with [size] and ignores the system font size, so it always fits in the ring.
  *
  * @see BgInfoSectionInRangePreview
  * @see BgInfoSectionHighPreview
@@ -59,19 +64,25 @@ fun BgInfoSection(
     modifier: Modifier = Modifier,
     size: Dp = AapsSpacing.bgCircleSize * LocalAapsScale.current,
     showTimeAgo: Boolean = true,
-    softColors: Boolean = false
+    softColors: Boolean = false,
+    textReferenceSize: Dp? = null
 ) {
+    val density = LocalDensity.current
+    val textDensity = if (textReferenceSize != null) Density(density.density * (size / textReferenceSize), fontScale = 1f) else density
+
     if (bgInfo == null) {
         // Show placeholder when no data
         Box(
             contentAlignment = Alignment.Center,
             modifier = modifier.size(size)
         ) {
-            Text(
-                text = "---",
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
+            CompositionLocalProvider(LocalDensity provides textDensity) {
+                Text(
+                    text = "---",
+                    style = MaterialTheme.typography.displayMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         }
         return
     }
@@ -165,36 +176,38 @@ fun BgInfoSection(
             }
         }
 
-        // Center content: delta on top, BG value, time ago below
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            modifier = Modifier.padding(bottom = AapsSpacing.small),
-            verticalArrangement = Arrangement.spacedBy((-2).dp, Alignment.CenterVertically)
-        ) {
-            // Delta on top
-            bgInfo.deltaText?.let { delta ->
-                Text(
-                    text = delta,
-                    style = AapsTheme.typography.bgSecondary,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
+        CompositionLocalProvider(LocalDensity provides textDensity) {
+            // Center content: delta on top, BG value, time ago below
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(bottom = AapsSpacing.small),
+                verticalArrangement = Arrangement.spacedBy((-2).dp, Alignment.CenterVertically)
+            ) {
+                // Delta on top
+                bgInfo.deltaText?.let { delta ->
+                    Text(
+                        text = delta,
+                        style = AapsTheme.typography.bgSecondary,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
 
-            // BG value - large bold text with strikethrough if outdated
-            Text(
-                text = bgInfo.bgText,
-                style = AapsTheme.typography.bgValue,
-                color = bgColor,
-                textDecoration = if (bgInfo.isOutdated) TextDecoration.LineThrough else TextDecoration.None
-            )
-
-            // Time ago below
-            if (showTimeAgo) {
+                // BG value - large bold text with strikethrough if outdated
                 Text(
-                    text = timeAgoText,
-                    style = AapsTheme.typography.bgTimeAgo,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                    text = bgInfo.bgText,
+                    style = AapsTheme.typography.bgValue,
+                    color = bgColor,
+                    textDecoration = if (bgInfo.isOutdated) TextDecoration.LineThrough else TextDecoration.None
                 )
+
+                // Time ago below
+                if (showTimeAgo) {
+                    Text(
+                        text = timeAgoText,
+                        style = AapsTheme.typography.bgTimeAgo,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
         }
     }

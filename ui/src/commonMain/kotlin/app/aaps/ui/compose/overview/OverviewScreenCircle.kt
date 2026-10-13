@@ -189,6 +189,8 @@ fun OverviewScreenCircle(
                         timeAgoText = bgInfoState.timeAgoText,
                         size = circleSize,
                         softColors = true,
+                        // The text is made for the full-size circle and shrinks with it
+                        textReferenceSize = AapsSpacing.homeCircleSize,
                         // Tapping the circle opens the CGM (BG source) page. The trend triangles are drawn
                         // outside the ring (up to about one ring width), so that room is kept free around the
                         // circle on every side, inside the round clip: they are neither cut off nor drawn over

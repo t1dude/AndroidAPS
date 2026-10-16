@@ -191,6 +191,9 @@ class DexcomG7DirectPlugin(
     override fun hasSensorError(): Boolean =
         store.value.lifecycleState(System.currentTimeMillis()).let { it == G7LifecycleState.FAILED || it == G7LifecycleState.EXPIRED }
 
+    override val sensorExpiresAt: Long?
+        get() = store.value.expiresAt
+
     // The stored state is not exported (it holds the key), so an import would wipe it. Keep it.
     private var stateBeforeImport: String? = null
 

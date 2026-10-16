@@ -30,11 +30,13 @@ import app.aaps.core.interfaces.concurrent.aapsIoDispatcher
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.DatabaseMaintenanceInfo
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.db.VacuumResult
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.database.AppRepository
+import app.aaps.database.VacuumOutcome
 import app.aaps.database.entities.Bolus
 import app.aaps.database.entities.BolusCalculatorResult
 import app.aaps.database.entities.CalibrationEntry
@@ -60,6 +62,7 @@ import app.aaps.database.transactions.CancelProfileSwitchTransaction
 import app.aaps.database.transactions.CancelRunningModeTransaction
 import app.aaps.database.transactions.CancelTherapyEventTransaction
 import app.aaps.database.transactions.CgmSourceTransaction
+import app.aaps.database.transactions.ConfirmTemporaryIdsTransaction
 import app.aaps.database.transactions.CutCarbsTransaction
 import app.aaps.database.transactions.InsertAndCancelCurrentTemporaryTargetTransaction
 import app.aaps.database.transactions.InsertBolusWithTempIdTransaction
@@ -135,13 +138,13 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import kotlin.reflect.KClass
-import kotlin.time.Duration.Companion.milliseconds
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlin.reflect.KClass
+import kotlin.time.Duration.Companion.milliseconds
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -170,8 +173,12 @@ class PersistenceLayerImpl(
         repository.cleanupDatabase(olderThan, deleteTrackedChanges)
     }
 
-    override suspend fun vacuumDatabase() = withContext(aapsIoDispatcher) {
-        repository.vacuumDatabase()
+    override suspend fun vacuumDatabase(): VacuumResult = withContext(aapsIoDispatcher) {
+        when (repository.vacuumDatabase()) {
+            VacuumOutcome.DONE            -> VacuumResult.DONE
+            VacuumOutcome.DONE_AFTER_TRIM -> VacuumResult.DONE_AFTER_TRIM
+            VacuumOutcome.OUT_OF_MEMORY   -> VacuumResult.OUT_OF_MEMORY
+        }
     }
 
     override suspend fun databaseMaintenanceInfo(retentionDays: Long): DatabaseMaintenanceInfo = withContext(aapsIoDispatcher) {
@@ -1406,22 +1413,24 @@ class PersistenceLayerImpl(
         repository.getLastProfileSwitchId()
     }
 
-    override suspend fun insertOrUpdateProfileSwitch(profileSwitch: PS, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): PersistenceLayer.TransactionResult<PS> = withContext(aapsIoDispatcher) {
+    // One record changes one row, so the single user entry of the list version is the same as before.
+    override suspend fun insertOrUpdateProfileSwitch(profileSwitch: PS, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): PersistenceLayer.TransactionResult<PS> =
+        insertOrUpdateProfileSwitches(listOf(profileSwitch), action, source, note, listValues)
+
+    override suspend fun insertOrUpdateProfileSwitches(profileSwitches: List<PS>, action: Action, source: Sources, note: String?, listValues: List<ValueWithUnit>): PersistenceLayer.TransactionResult<PS> = withContext(aapsIoDispatcher) {
         try {
-            val result = repository.runTransactionForResultSuspend(InsertOrUpdateProfileSwitchTransaction(profileSwitch.toDb()))
+            val result = repository.runTransactionForResultSuspend(InsertOrUpdateProfileSwitchTransaction(profileSwitches.map { it.toDb() }))
             val transactionResult = PersistenceLayer.TransactionResult<PS>()
-            val ueValues = mutableListOf<UE>()
             result.inserted.forEach {
                 aapsLogger.debug(LTag.DATABASE, "Inserted ProfileSwitch from ${source.name} $it")
                 transactionResult.inserted.add(it.fromDb())
-                ueValues.add(UE(timestamp = dateUtil.now(), action = action, source = source, note = note ?: "", values = listValues))
             }
             result.updated.forEach {
                 aapsLogger.debug(LTag.DATABASE, "Updated ProfileSwitch from ${source.name} $it")
                 transactionResult.updated.add(it.fromDb())
-                ueValues.add(UE(timestamp = dateUtil.now(), action = action, source = source, note = note ?: "", values = listValues))
             }
-            log(ueValues)
+            if (transactionResult.inserted.isNotEmpty() || transactionResult.updated.isNotEmpty())
+                log(listOf(UE(timestamp = dateUtil.now(), action = action, source = source, note = note ?: "", values = listValues)))
             transactionResult
         } catch (e: Exception) {
             aapsLogger.error(LTag.DATABASE, "Error while inserting ProfileSwitch", e)
@@ -1763,6 +1772,18 @@ class PersistenceLayerImpl(
             transactionResult
         } catch (e: Exception) {
             aapsLogger.error(LTag.DATABASE, "Error while saving TemporaryBasal", e)
+            throw e
+        }
+    }
+
+    override suspend fun confirmTemporaryIds(): Int = withContext(aapsIoDispatcher) {
+        try {
+            val result = repository.runTransactionForResultSuspend(ConfirmTemporaryIdsTransaction())
+            result.temporaryBasals.forEach { aapsLogger.debug(LTag.DATABASE, "Kept TemporaryBasal with its temporary id as pump id $it") }
+            result.boluses.forEach { aapsLogger.debug(LTag.DATABASE, "Kept Bolus with its temporary id as pump id $it") }
+            result.temporaryBasals.size + result.boluses.size
+        } catch (e: Exception) {
+            aapsLogger.error(LTag.DATABASE, "Error while keeping records with a temporary id", e)
             throw e
         }
     }
@@ -2575,6 +2596,10 @@ class PersistenceLayerImpl(
         repository.getApsResults(start, end).map { it.fromDb(apsResultProvider) }
     }
 
+    override suspend fun getVariableSensitivities(start: Long, end: Long): List<PersistenceLayer.VariableSensitivity> = withContext(aapsIoDispatcher) {
+        repository.getApsResultVariableSens(start, end).mapNotNull { row -> row.variableSens?.let { PersistenceLayer.VariableSensitivity(row.timestamp, it) } }
+    }
+
     private val nonFiniteFieldRegex = Regex("(\\w+)=(NaN|Infinity|-Infinity)\\b")
 
     // Diagnostic only — must never let a reporting failure block persistence of the APSResult, so the whole
@@ -2607,12 +2632,13 @@ class PersistenceLayerImpl(
             reportNonFiniteRtFields(apsResult)
             val result = repository.runTransactionForResultSuspend(InsertOrUpdateApsResultTransaction(apsResult.toDb()))
             val transactionResult = PersistenceLayer.TransactionResult<APSResult>()
+            // Identity only: the entity's toString holds all seven JSON columns, several KB per loop run
             result.inserted.forEach {
-                aapsLogger.debug(LTag.DATABASE, "Inserted APSResult $it")
+                aapsLogger.debug(LTag.DATABASE, "Inserted APSResult id=${it.id} timestamp=${it.timestamp} algorithm=${it.algorithm}")
                 transactionResult.inserted.add(it.fromDb(apsResultProvider))
             }
             result.updated.forEach {
-                aapsLogger.debug(LTag.DATABASE, "Updated APSResult $it")
+                aapsLogger.debug(LTag.DATABASE, "Updated APSResult id=${it.id} timestamp=${it.timestamp} algorithm=${it.algorithm}")
                 transactionResult.updated.add(it.fromDb(apsResultProvider))
             }
             transactionResult

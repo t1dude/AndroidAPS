@@ -28,14 +28,14 @@ import app.aaps.core.interfaces.pump.ble.PairingState
 import app.aaps.core.interfaces.pump.ble.ScannedDevice
 import app.aaps.core.utils.extensions.connectGattCompat
 import app.aaps.core.utils.extensions.safeEnable
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.UUID
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.SingleIn
 
 @SingleIn(AppScope::class)
 @Inject
@@ -179,6 +179,11 @@ class BleTransportImpl(
 
         @SuppressLint("MissingPermission")
         override fun startScan() {
+            // Without the permission Android throws a SecurityException, and the app ends
+            if (!hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
+                aapsLogger.error(LTag.PUMPBTCOMM, "BLUETOOTH_SCAN permission missing, no scan")
+                return
+            }
             scanCallback = object : ScanCallback() {
                 override fun onScanResult(callbackType: Int, result: ScanResult) {
                     val device = result.device ?: return
@@ -290,6 +295,6 @@ class BleTransportImpl(
         }
     }
 
-    private fun hasPermission(): Boolean =
-        ActivityCompat.checkSelfPermission(context, Manifest.permission.BLUETOOTH_CONNECT) == PackageManager.PERMISSION_GRANTED
+    private fun hasPermission(permission: String = Manifest.permission.BLUETOOTH_CONNECT): Boolean =
+        ActivityCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 }

@@ -49,6 +49,19 @@ data class DatabaseMaintenanceInfo(
     val report: String
 )
 
+/** How a [PersistenceLayer.vacuumDatabase] ended. Any other failure is thrown. */
+enum class VacuumResult {
+
+    /** The database was compacted. */
+    DONE,
+
+    /** It did not fit in memory at first, so old APS results and device statuses were deleted, and then it was compacted. */
+    DONE_AFTER_TRIM,
+
+    /** It did not fit in memory even after that. Trying again soon would only fail the same way. */
+    OUT_OF_MEMORY
+}
+
 interface PersistenceLayer {
 
     /**
@@ -73,8 +86,11 @@ interface PersistenceLayer {
      * Full VACUUM of the database: defragments the file and returns free pages to the OS.
      * Heavy and memory intensive — only call when nothing else is using the DB (e.g. on startup
      * before plugins/loop/sync start). May throw if the DB is busy/locked.
+     *
+     * When the database does not fit in memory, APS results and device statuses older than a few days
+     * are deleted and it is tried once more - see [VacuumResult].
      */
-    suspend fun vacuumDatabase()
+    suspend fun vacuumDatabase(): VacuumResult
 
     /**
      * Collect DB size, free space and per-table row counts (total, older-than-retention, tracked
@@ -714,6 +730,21 @@ interface PersistenceLayer {
     suspend fun insertOrUpdateProfileSwitch(profileSwitch: PS, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<PS>
 
     /**
+     * Insert or update several records in one database transaction, so an observer sees all of them or none.
+     * An insulin change writes the permanent switch and a copy of the running temporary one. Written one by one,
+     * the pump queue could set the permanent profile first and drop the temporary percentage for a moment.
+     * One user entry is logged for the whole call.
+     *
+     * @param profileSwitches records
+     * @param action Action for UserEntry logging
+     * @param source Source for UserEntry logging
+     * @param note Note for UserEntry logging
+     * @param listValues Values for UserEntry logging
+     * @return List of inserted/updated records
+     */
+    suspend fun insertOrUpdateProfileSwitches(profileSwitches: List<PS>, action: Action, source: Sources, note: String? = null, listValues: List<ValueWithUnit>): TransactionResult<PS>
+
+    /**
      * Invalidate record with id
      *
      * @param id record id
@@ -1061,6 +1092,15 @@ interface PersistenceLayer {
      * @return List of inserted records
      */
     suspend fun insertTemporaryBasalWithTempId(temporaryBasal: TB): TransactionResult<TB>
+
+    /**
+     * Keeps the temp basals and boluses with only a temporary id (set by AAPS, not found in the pump history yet)
+     * as they were set: each is stored again with its temporary id as pump id, so it is uploaded to Nightscout, and
+     * the old entry is invalidated. For a pump change, after which no pump confirms them any more.
+     *
+     * @return how many records were kept
+     */
+    suspend fun confirmTemporaryIds(): Int
 
     // EB
     /**
@@ -1651,6 +1691,23 @@ interface PersistenceLayer {
      * @return List of APSResult
      */
     suspend fun getApsResults(start: Long, end: Long): List<APSResult>
+
+    /**
+     * Get the variable sensitivity of every APSResult in an interval, oldest first
+     *
+     * Reads only the time and the value, not the whole result, so it is cheap enough to run on every
+     * calculation. Results without a value, or with NaN, are left out.
+     *
+     * @param start from
+     * @param end to
+     * @return list of values in mg/dL
+     */
+    suspend fun getVariableSensitivities(start: Long, end: Long): List<VariableSensitivity>
+
+    data class VariableSensitivity(
+        val timestamp: Long,
+        val valueMgdl: Double
+    )
 
     /**
      * Insert or update ApsResult record

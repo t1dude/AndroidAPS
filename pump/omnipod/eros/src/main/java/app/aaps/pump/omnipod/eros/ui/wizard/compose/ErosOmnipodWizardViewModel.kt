@@ -12,7 +12,9 @@ import app.aaps.core.interfaces.profile.ProfileRepository
 import app.aaps.core.interfaces.pump.PumpEnactResult
 import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.queue.CommandQueue
+import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.AapsSchedulers
+import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.keys.BooleanKey
 import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.interfaces.Preferences
@@ -26,12 +28,12 @@ import app.aaps.pump.omnipod.eros.manager.AapsErosPodStateManager
 import app.aaps.pump.omnipod.eros.manager.AapsOmnipodErosManager
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesIntoMap
+import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.binding
 import dev.zacsweers.metrox.viewmodel.ViewModelKey
 import io.reactivex.rxjava3.core.Single
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.rx3.rxSingle
-import dev.zacsweers.metro.Inject
 import app.aaps.pump.omnipod.common.R as CommonR
 
 @Stable
@@ -52,7 +54,9 @@ class ErosOmnipodWizardViewModel(
     private val preferences: Preferences,
     pumpEnactResultProvider: () -> PumpEnactResult,
     logger: AAPSLogger,
-    aapsSchedulers: AapsSchedulers
+    aapsSchedulers: AapsSchedulers,
+    rh: ResourceHelper,
+    rxBus: RxBus
 ) : OmnipodWizardViewModel(
     logger,
     aapsSchedulers,
@@ -60,7 +64,9 @@ class ErosOmnipodWizardViewModel(
     profileFunction,
     profileRepository,
     insulinManager,
-    persistenceLayer
+    persistenceLayer,
+    rh,
+    rxBus
 ) {
 
     override val pumpSource: Sources = Sources.OmnipodEros

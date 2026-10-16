@@ -15,6 +15,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import app.aaps.core.interfaces.pump.BlePreCheck
 import app.aaps.core.ui.compose.ToolbarConfig
 import app.aaps.core.ui.compose.dialogs.OkCancelDialog
@@ -77,6 +80,18 @@ fun OmnipodComposeHost(
             setToolbarConfig(ToolbarConfig(title = pluginName, navigationIcon = overviewNavIcon, actions = settingsAction))
         }
     }
+
+    // System back on a sub-screen (pod history) returns to the plugin page, the same as the toolbar
+    // arrow. Without this handler the event reaches the app NavHost, which pops the whole plugin page.
+    // The wizard has its own handler in WizardScreen, so it is not covered here.
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = showExtraContent,
+        onBackCompleted = {
+            showExtraContent = false
+            wizardActivationType = null
+        }
+    )
 
     LaunchedEffect(overviewEvents) {
         overviewEvents.collect { event ->
@@ -147,22 +162,26 @@ fun OmnipodComposeHost(
     when {
         showWizard       -> {
             KeepScreenOnEffect()
-            BlePreCheckHost(blePreCheck = blePreCheck, onFailed = { showWizard = false })
-            val viewModel = wizardViewModel()
-            val wizardReady by viewModel.ready.collectAsStateWithLifecycle()
-            LaunchedEffect(wizardReady, isDeactivation, wizardActivationType) {
-                if (!wizardReady) return@LaunchedEffect
-                if (isDeactivation) {
-                    viewModel.initializeDeactivation()
-                } else {
-                    wizardActivationType?.let(viewModel::initializeActivation)
+            // The wizard uses Bluetooth, so it starts only after the check has passed
+            var bleReady by remember { mutableStateOf(false) }
+            BlePreCheckHost(blePreCheck = blePreCheck, onReady = { bleReady = true }, onFailed = { showWizard = false })
+            if (bleReady) {
+                val viewModel = wizardViewModel()
+                val wizardReady by viewModel.ready.collectAsStateWithLifecycle()
+                LaunchedEffect(wizardReady, isDeactivation, wizardActivationType) {
+                    if (!wizardReady) return@LaunchedEffect
+                    if (isDeactivation) {
+                        viewModel.initializeDeactivation()
+                    } else {
+                        wizardActivationType?.let(viewModel::initializeActivation)
+                    }
                 }
+                OmnipodWizardScreen(
+                    viewModel = viewModel,
+                    onFinish = { showWizard = false },
+                    setToolbarConfig = setToolbarConfig
+                )
             }
-            OmnipodWizardScreen(
-                viewModel = viewModel,
-                onFinish = { showWizard = false },
-                setToolbarConfig = setToolbarConfig
-            )
         }
 
         showExtraContent -> historyContent?.invoke { showExtraContent = false }

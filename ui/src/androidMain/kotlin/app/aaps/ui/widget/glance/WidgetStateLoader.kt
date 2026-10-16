@@ -115,8 +115,9 @@ class WidgetStateLoader(
         var tempTargetColor = WidgetTextMuted
         var tempTargetActive = false
         if (tempTarget != null) {
+            // A target without an end (a scene without a duration) shows no remaining time, like the overview chip.
             tempTargetText = profileUtil.toTargetRangeString(tempTarget.lowTarget, tempTarget.highTarget, GlucoseUnit.MGDL, units) +
-                " " + dateUtil.untilString(tempTarget.end, rh)
+                if (tempTarget.hasEnd) " " + dateUtil.untilString(tempTarget.end, rh) else ""
             tempTargetColor = tempTarget.reason.ttReasonColor(DarkGeneralColors).toArgb()
             tempTargetActive = true
         } else {
@@ -217,6 +218,7 @@ class WidgetStateLoader(
             tbrDescription = tbrDescription,
             iobLabel = rh.gs(CoreUiStrings.iob),
             cobLabel = rh.gs(CoreUiStrings.cob),
+            bgSpoken = if (strikeThrough) listOf(bgText, rh.gs(UiStrings.a11y_bg_old_reading)).joinToString(", ") else bgText,
             deltaText = deltaText,
             timeAgoText = timeAgoText,
             iobText = iobText,

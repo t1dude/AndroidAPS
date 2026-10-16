@@ -14,11 +14,12 @@ import app.aaps.core.data.model.SC
 import app.aaps.core.data.model.TB
 import app.aaps.core.data.model.TE
 import app.aaps.core.data.model.TT
+import app.aaps.core.data.model.endOf
 import app.aaps.core.data.model.latestRunningAt
 import app.aaps.core.data.time.T
-import app.aaps.core.interfaces.concurrent.aapsIoDispatcher
 import app.aaps.core.interfaces.InterfacesStrings
 import app.aaps.core.interfaces.aps.Loop
+import app.aaps.core.interfaces.concurrent.aapsIoDispatcher
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.db.ProcessedTbrEbData
@@ -96,8 +97,6 @@ import app.aaps.core.ui.CoreUiStrings
 import app.aaps.ui.UiStrings
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedInject
-import kotlin.math.abs
-import kotlin.math.max
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -117,6 +116,8 @@ import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.math.abs
+import kotlin.math.max
 
 /**
  * Implementation of OverviewDataCache using MutableStateFlow.
@@ -143,6 +144,24 @@ private const val WARN_BATTERY_PERCENT = 30.0
 private const val URGENT_BATTERY_PERCENT = 20.0
 private const val WARN_BATTERY_VOLTAGE = 1.35
 private const val URGENT_BATTERY_VOLTAGE = 1.3
+
+/**
+ * What a tap on a therapy event in the graph shows.
+ *
+ * A BG check is only an icon in the treatment belt, so its position does not show the value the way
+ * the old BG graph did. The value goes in the label, before the note, so a long note that is cut at
+ * the end of the one-line label cannot hide it.
+ */
+internal fun therapyEventLabel(te: TE, typeName: String, profileUtil: ProfileUtil, rh: TextResolver): String {
+    val note = te.note?.takeIf { it.isNotBlank() }
+    val bg = te.glucose?.let { profileUtil.fromMgdlToStringWithUnits(profileUtil.convertToMgdl(it, te.glucoseUnit)) }
+    return when {
+        bg != null && note != null -> rh.gs(UiStrings.graph_therapy_event_bg_with_note, bg, note)
+        bg != null                 -> bg
+        note != null               -> note
+        else                       -> typeName
+    }
+}
 
 @OptIn(FlowPreview::class)
 @AssistedInject
@@ -302,10 +321,9 @@ class OverviewDataCacheImpl(
         }
 
         // Scope-agnostic: new predictions move the right edge of the axis, and the series that are
-        // drawn to that edge have to follow. `timeRangeFlow` alone is not enough - it only carries
-        // the horizon as `TimeRange.endTime`, which is clamped to two hours, and a `StateFlow` drops
-        // a value equal to the last one. So a prediction run that leaves `endTime` where it was
-        // emits nothing here, and the basal would keep the previous horizon while the axis has
+        // drawn to that edge have to follow. `timeRangeFlow` alone is not enough: a `StateFlow`
+        // drops a value equal to the last one, so a prediction run that leaves `endTime` where it
+        // was emits nothing here, and the basal would keep the previous horizon while the axis has
         // already taken the new one.
         scope.launch {
             predictionsFlow
@@ -865,7 +883,7 @@ class OverviewDataCacheImpl(
                     amount = bs.amount,
                     bolusType = if (bs.type == BS.Type.SMB) BolusType.SMB else BolusType.NORMAL,
                     isValid = bs.isValid,
-                    label = decimalFormatter.toPumpSupportedBolus(bs.amount, bolusStep)
+                    label = decimalFormatter.toPumpSupportedBolusWithUnits(bs.amount, bolusStep)
                 )
             }
 
@@ -897,7 +915,7 @@ class OverviewDataCacheImpl(
 
         // Therapy events
         val therapyEventPoints = persistenceLayer.getTherapyEventDataFromToTime(fromTime - T.hours(6).msecs(), toTime)
-            .filter { te -> te.timestamp + te.duration >= fromTime && te.timestamp <= toTime }
+            .filter { te -> endOf(te.timestamp, te.duration) >= fromTime && te.timestamp <= toTime }
             .map { te ->
                 val teType = when {
                     te.type == TE.Type.NS_MBG                -> TherapyEventType.MBG
@@ -908,11 +926,10 @@ class OverviewDataCacheImpl(
                     te.duration > 0                          -> TherapyEventType.GENERAL_WITH_DURATION
                     else                                     -> TherapyEventType.GENERAL
                 }
-                val teLabel = if (!te.note.isNullOrBlank()) te.note!! else translator.translate(te.type)
                 TherapyEventGraphPoint(
                     timestamp = te.timestamp,
                     eventType = teType,
-                    label = teLabel,
+                    label = therapyEventLabel(te, translator.translate(te.type), profileUtil, rh),
                     duration = te.duration
                 )
             }
@@ -1282,13 +1299,15 @@ internal fun profileBoundariesIn(switches: List<EPS>, fromTime: Long): List<Long
  *
  * `graphTimeRange` ends at `TimeRange.endTime`, and that is not always the right edge of the chart.
  * The axis is `max(newest BG / bucketed / prediction point, endTime)` (see
- * `GraphViewModel.derivedTimeRange`), and `endTime` is the shorter of the two in two ways:
+ * `GraphViewModel.derivedTimeRange`), and `endTime` can still be the shorter of the two: it is only
+ * as new as the last run of `PostCalculationRunner`, which is the phase that owns it. Until that
+ * phase has run once - a fresh start, or a restore that reset the cache - the range holds `toTime`
+ * alone while a prediction from an earlier loop run already reaches further.
  *
- * - `PostCalculationRunner` clamps the horizon to two hours while the predictions themselves are
- *   not clamped, so the last prediction can sit past `endTime`.
- * - `PrepareGraphDataRunner` collapses `endTime` back to `toTime` on every pass and
- *   `PostCalculationRunner` restores it afterwards, so it stays short for as long as that second
- *   pass does not run - after a failed or skipped loop run, indefinitely.
+ * It used to be short in two more ways, both fixed in `:workflow` rather than worked around here:
+ * the horizon was clamped to two hours while the predictions were not, and `PrepareGraphDataRunner`
+ * collapsed `endTime` back to `toTime` on every pass - which also cut the future IOB and activity
+ * short, because those are built in that pass. See `app.aaps.workflow.keptEndTime`.
  *
  * A series that stops at `endTime` then ends before the axis does. On the basal graph that reads as
  * the line simply stopping short of "now", because basal is the one series a reader expects to be

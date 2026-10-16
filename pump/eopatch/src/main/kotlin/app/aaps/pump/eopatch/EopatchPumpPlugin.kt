@@ -14,6 +14,7 @@ import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.plugin.PluginDescription
+import app.aaps.core.interfaces.profile.Profile
 import app.aaps.core.interfaces.protection.ProtectionCheck
 import app.aaps.core.interfaces.pump.BlePreCheck
 import app.aaps.core.interfaces.pump.BolusProgressData
@@ -54,6 +55,11 @@ import app.aaps.pump.eopatch.keys.EopatchStringNonKey
 import app.aaps.pump.eopatch.vo.NormalBasalManager
 import app.aaps.pump.eopatch.vo.PatchConfig
 import app.aaps.pump.eopatch.vo.TempBasal
+import dev.zacsweers.metro.AppScope
+import dev.zacsweers.metro.ContributesIntoMap
+import dev.zacsweers.metro.Inject
+import dev.zacsweers.metro.SingleIn
+import dev.zacsweers.metro.binding
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.functions.Consumer
 import io.reactivex.rxjava3.kotlin.plusAssign
@@ -71,14 +77,9 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.runBlocking
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.ContributesIntoMap
-import dev.zacsweers.metro.IntKey as MetroIntKey
-import dev.zacsweers.metro.binding
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import kotlin.math.abs
 import app.aaps.core.ui.R as CoreUiR
+import dev.zacsweers.metro.IntKey as MetroIntKey
 
 @ContributesIntoMap(AppScope::class, binding = binding<PluginBase>())
 @PumpDriver
@@ -187,8 +188,12 @@ class EopatchPumpPlugin(
         return isConfigured() && isConnected()
     }
 
+    /**
+     * No active patch gives no insulin, so it is suspended, as Omnipod, Equil and Medtrum report it. It was "not
+     * suspended" between two patches: the loop kept running and AAPS counted the scheduled basal as given (#2552).
+     */
     override fun isSuspended(): Boolean {
-        return preferenceManager.patchState.isNormalBasalPaused
+        return !patchConfig.isActivated || preferenceManager.patchState.isNormalBasalPaused
     }
 
     override fun isBusy(): Boolean {
@@ -294,10 +299,17 @@ class EopatchPumpPlugin(
         //     return true
         // }
 
-        val ret = normalBasalManager.isEqual(profile)
-        aapsLogger.info(LTag.PUMP, "Is this profile set? $ret")
+        // An active patch must also run this basal as it is rounded now. After an update that changed the rounding
+        // it still runs the old program, and AAPS would report doses it does not give (#2454).
+        val sent = !patchConfig.isActivated || normalBasalManager.normalBasal.isSentWithCurrentRounding
+        val ret = normalBasalManager.isEqual(profile) && sent
+        aapsLogger.info(LTag.PUMP, "Is this profile set? $ret (sent with current rounding: $sent)")
         return ret
     }
+
+    /** The patch rounds each rate to the nearest 0.05 U/h (#2454), see [app.aaps.pump.eopatch.vo.NormalBasal.doseUnitPerSegmentArray]. */
+    override fun deliveredBasal(): List<Profile.ProfileValue> =
+        normalBasalManager.normalBasal.deliveredDoseUnitPerHour.mapIndexed { hour, rate -> Profile.ProfileValue(T.hours(hour.toLong()).secs().toInt(), rate) }
 
     private val _lastDataTime = MutableStateFlow(0L)
     override val lastDataTime: StateFlow<Long> = _lastDataTime
@@ -315,7 +327,8 @@ class EopatchPumpPlugin(
     override val baseBasalRate: PumpRate
         get() = PumpRate(
             if (!patchConfig.isActivated || preferenceManager.patchState.isNormalBasalPaused) 0.0
-            else normalBasalManager.normalBasal.getCurrentSegment()?.doseUnitPerHour?.toDouble() ?: 0.05
+            // What the patch really gives, as the running profile holds it - not the rate it was asked for.
+            else normalBasalManager.normalBasal.currentDeliveredDoseUnitPerHour
         )
 
     override suspend fun deliverTreatment(detailedBolusInfo: DetailedBolusInfo): PumpEnactResult {

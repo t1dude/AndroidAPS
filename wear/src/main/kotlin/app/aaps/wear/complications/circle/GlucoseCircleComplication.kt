@@ -60,7 +60,8 @@ class GlucoseCircleComplication : ModernBaseComplicationProviderService() {
         }
         val input = input(data)
         val sizePx = (resources.displayMetrics.widthPixels * SLOT_FRACTION).toInt()
-        val description = listOf(input.bgText, input.deltaText, input.timeAgoText).filter { it.isNotEmpty() }.joinToString(", ")
+        val source = if (input.fromSensor) getString(R.string.glucose_circle_from_sensor) else ""
+        val description = listOf(input.bgText, input.deltaText, input.timeAgoText, source).filter { it.isNotEmpty() }.joinToString(", ")
         return SmallImageComplicationData.Builder(
             smallImage = SmallImage.Builder(
                 image = Icon.createWithBitmap(GlucoseCircleRenderer.render(sizePx, input)),
@@ -85,7 +86,8 @@ class GlucoseCircleComplication : ModernBaseComplicationProviderService() {
             deltaText = bg.delta,
             timeAgoText = if (!hasBg) ""
             else if (age < Constants.HOUR_IN_MS) getString(R.string.glucose_circle_min_ago, (age / Constants.MINUTE_IN_MS).toInt().coerceAtLeast(0))
-            else displayFormat.shortTimeSince(bg.timeStamp)
+            else displayFormat.shortTimeSince(bg.timeStamp),
+            fromSensor = hasBg && bg.fromSensor
         )
     }
 

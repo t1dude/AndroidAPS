@@ -137,12 +137,6 @@ class TempTargetManagementViewModel(
                 val now = dateUtil.now()
                 val activeTT = persistenceLayer.getTemporaryTargetActiveAt(now)
 
-                // Calculate remaining time
-                val remainingTime = activeTT?.let { tt ->
-                    val endTime = tt.timestamp + tt.duration
-                    if (endTime > now) endTime - now else 0L
-                }
-
                 // Check if notes field should be shown
                 val showNotes = preferences.get(BooleanKey.OverviewShowNotesInDialogs)
 
@@ -163,7 +157,9 @@ class TempTargetManagementViewModel(
 
                 // If active TT shown (standalone or matched preset), mirror its values; else use preset values
                 val initialTargetMgdl = activeTT?.lowTarget ?: initialPreset?.targetValue ?: 100.0
-                val initialDurationMs = activeTT?.duration ?: initialPreset?.duration ?: (60L * 60L * 1000L)
+                // A target without an end (a scene without a duration) has no duration to copy. Copying its
+                // Long.MAX_VALUE would start a new target that never ends, so the editor takes the preset's.
+                val initialDurationMs = activeTT?.takeIf { it.hasEnd }?.duration ?: initialPreset?.duration ?: (60L * 60L * 1000L)
 
                 // Convert target from mg/dL (storage) to user units (display) with proper rounding
                 val targetInUserUnits = roundForDisplay(profileUtil.fromMgdlToUnits(initialTargetMgdl, units), units)
@@ -173,12 +169,17 @@ class TempTargetManagementViewModel(
                         activeTT = activeTT,
                         activePresetIndex = activePresetIndex,
                         currentCardIndex = activePresetIndex ?: 0,
-                        remainingTimeMs = remainingTime,
                         presets = presets,
                         selectedPreset = initialPreset,
                         editorName = initialPreset?.name ?: "",
                         editorTarget = targetInUserUnits,
                         editorDuration = initialDurationMs,
+                        // The activation time has to be set here, not left to selectPreset: this already assigns
+                        // selectedPreset, so the screen's later selectPreset(index) returns early on "same preset"
+                        // and never runs. Without this the state keeps its 0L default, the screen shows 1/1/70,
+                        // and a user who only changes the time gets a target stamped in 1970 that never runs.
+                        eventTime = dateUtil.now(),
+                        eventTimeChanged = false,
                         showNotesField = showNotes,
                         isLoading = false
                     )
@@ -202,11 +203,6 @@ class TempTargetManagementViewModel(
                 val now = dateUtil.now()
                 val activeTT = persistenceLayer.getTemporaryTargetActiveAt(now)
 
-                val remainingTime = activeTT?.let { tt ->
-                    val endTime = tt.timestamp + tt.duration
-                    if (endTime > now) endTime - now else 0L
-                }
-
                 val showNotes = preferences.get(BooleanKey.OverviewShowNotesInDialogs)
 
                 val activePresetIndex = activeTT?.let { tt ->
@@ -220,7 +216,6 @@ class TempTargetManagementViewModel(
                     it.copy(
                         activeTT = activeTT,
                         activePresetIndex = activePresetIndex,
-                        remainingTimeMs = remainingTime,
                         presets = presets,
                         showNotesField = showNotes
                     )
@@ -419,7 +414,7 @@ class TempTargetManagementViewModel(
         val activeTT = uiState.value.activeTT
         val isActive = activeTT != null && index == uiState.value.activePresetIndex
         val targetMgdl = if (isActive) activeTT.lowTarget else preset?.targetValue ?: 100.0
-        val durationMs = if (isActive) activeTT.duration else preset?.duration ?: (60L * 60L * 1000L)
+        val durationMs = activeTT?.takeIf { isActive && it.hasEnd }?.duration ?: preset?.duration ?: (60L * 60L * 1000L)
         val targetInUserUnits = roundForDisplay(profileUtil.fromMgdlToUnits(targetMgdl, units), units)
 
         _uiState.update {
@@ -449,7 +444,7 @@ class TempTargetManagementViewModel(
                 selectedPreset = null,
                 editorName = "",
                 editorTarget = targetInUserUnits,
-                editorDuration = tt.duration,
+                editorDuration = if (tt.hasEnd) tt.duration else 60L * 60L * 1000L,
                 eventTime = dateUtil.now(),
                 eventTimeChanged = false,
                 notes = ""

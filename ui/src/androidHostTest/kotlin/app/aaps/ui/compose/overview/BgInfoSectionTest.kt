@@ -229,9 +229,10 @@ class BgInfoSectionTest {
                 }
             }
         }
-        // In px: getBoundsInRoot() would convert with the scaled density of the text
-        val top = compose.onNodeWithText("-1.0").fetchSemanticsNode().boundsInRoot.top
-        val bottom = compose.onNodeWithText("7m ago").fetchSemanticsNode().boundsInRoot.bottom
+        // In px: getBoundsInRoot() would convert with the scaled density of the text. The unmerged tree: the
+        // circle merges its texts into one screen reader node, and that node has the size of the whole circle.
+        val top = compose.onNodeWithText("-1.0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+        val bottom = compose.onNodeWithText("7m ago", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.bottom
         val textHeight = with(compose.density) { (bottom - top).toDp() }
         return textHeight to (size - AapsSpacing.bgRingStrokeWidth * 2)
     }

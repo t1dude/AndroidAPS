@@ -8,6 +8,7 @@ import androidx.wear.watchface.complications.data.ShortTextComplicationData
 import app.aaps.wear.R
 import app.aaps.wear.complications.cwf.CwfFaceComplication
 import app.aaps.wear.data.ComplicationData as ComplicationStore
+import dev.zacsweers.metro.HasMemberInjections
 
 /**
  * The glucose reading, for the ambient layer of the Watch Face Format face.
@@ -21,7 +22,8 @@ import app.aaps.wear.data.ComplicationData as ComplicationStore
  * Custom watch face opened the loop status screen for no visible reason. Sending it to the menu
  * instead makes every tap on the face behave the same way, whichever slot happens to be underneath.
  */
-class CwfAmbientBgComplication : SgvComplication() {
+@HasMemberInjections
+open class CwfAmbientBgComplication : SgvComplication() {
 
     /**
      * Drops the age line while no reading has ever arrived.

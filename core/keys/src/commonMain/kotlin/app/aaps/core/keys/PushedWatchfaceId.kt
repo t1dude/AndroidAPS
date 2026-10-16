@@ -13,4 +13,10 @@ object PushedWatchfaceId {
 
     /** The face that shows the wearer's own Custom watchface zip as a picture */
     const val CWF = "cwf"
+
+    /** The face with the overview's glucose circle */
+    const val CIRCLE = "circle"
+
+    /** Every face, in the order the phone offers them */
+    val ALL = listOf(CWF, WFS, CIRCLE)
 }

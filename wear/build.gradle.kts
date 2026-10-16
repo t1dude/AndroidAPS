@@ -128,7 +128,7 @@ allprojects {
  * assets under `watchfacepush/`, as `<face>.apk` and `<face>_token.txt`. The token is a hash
  * over the exact APK bytes, so it must be regenerated on every face build — never hardcoded.
  *
- * Both faces are embedded although only one is ever installed: Watch Face Push gives an app one
+ * All faces are embedded although only one is ever installed: Watch Face Push gives an app one
  * slot, and the wear app fills it with the face the wearer selected (see `WatchFacePushHelper`).
  */
 abstract class EmbedWatchFaceTask @Inject constructor(
@@ -142,6 +142,10 @@ abstract class EmbedWatchFaceTask @Inject constructor(
     /** Resolved artifact of :wear:watchfacepush — the APK output directory of the `cwf` face */
     @get:InputFiles
     abstract val cwfApkDir: ConfigurableFileCollection
+
+    /** Resolved artifact of :wear:watchfacepush — the APK output directory of the `circle` face */
+    @get:InputFiles
+    abstract val circleApkDir: ConfigurableFileCollection
 
     @get:Input
     abstract val clientPackageName: Property<String>
@@ -159,6 +163,7 @@ abstract class EmbedWatchFaceTask @Inject constructor(
         assetDir.mkdirs()
         embed("wfs", wfsApkDir, assetDir)
         embed("cwf", cwfApkDir, assetDir)
+        embed("circle", circleApkDir, assetDir)
     }
 
     private fun embed(face: String, apkDir: ConfigurableFileCollection, assetDir: File) {
@@ -195,7 +200,7 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
         // the face module) — the wear app's own build type does not change the face APKs.
         // Consumed as artifact configurations so the producing tasks are wired in automatically,
         // one per face: the face module names them watchfaceApk<Flavor><Face>.
-        val faceApkConfigurations = listOf("wfs", "cwf").associateWith { face ->
+        val faceApkConfigurations = listOf("wfs", "cwf", "circle").associateWith { face ->
             val faceCap = face.replaceFirstChar { it.uppercase() }
             val configuration = configurations.create("watchFaceApk$variantCap$faceCap") {
                 isCanBeConsumed = false
@@ -213,6 +218,7 @@ extensions.configure<ApplicationAndroidComponentsExtension>("androidComponents")
         ) {
             wfsApkDir.from(faceApkConfigurations.getValue("wfs"))
             cwfApkDir.from(faceApkConfigurations.getValue("cwf"))
+            circleApkDir.from(faceApkConfigurations.getValue("circle"))
             clientPackageName.set(variant.applicationId)
             validatorClasspath.from(watchFacePushValidator)
         }

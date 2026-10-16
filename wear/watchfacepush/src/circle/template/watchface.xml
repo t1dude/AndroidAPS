@@ -1,0 +1,897 @@
+<WatchFace clipShape="CIRCLE" height="450" width="450">
+    <Metadata key="CLOCK_TYPE" value="DIGITAL" />
+
+    <!-- The glucose circle face. Written by wear/watchfacepush/tools/circle/gen_watchface_xml.py:
+         change the layout there, see the README.
+
+         The circle is a picture drawn by the wear app (GlucoseCircleComplication). In ambient mode it
+         is hidden and a grey ring with the reading as text is shown instead.
+
+         Angles are in degrees, clockwise from 12 o'clock. The edge slots cover the whole face, so
+         their arcs can use the face's centre. -->
+
+    <Scene backgroundColor="#ff000000">
+
+        <PartImage x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <Image resource="background" />
+        </PartImage>
+
+        <!-- Ambient ring, at the radius of the ring in the picture -->
+        <PartDraw x="107" y="50" width="236" height="236" alpha="0">
+            <Variant mode="AMBIENT" target="alpha" value="255" />
+            <Ellipse x="25.3" y="25.3" width="185.3" height="185.3">
+                <Stroke color="#ff6e6e6e" thickness="4" />
+            </Ellipse>
+        </PartDraw>
+
+        <!-- The circle picture. Tapping it opens the BG graph. -->
+        <ComplicationSlot
+            name="GlucoseCircle"
+            slotId="0"
+            displayName="Glucose circle"
+            isCustomizable="FALSE"
+            supportedTypes="SMALL_IMAGE EMPTY"
+            alpha="255"
+            x="107" y="50" width="236" height="236">
+            <DefaultProviderPolicy
+                primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.circle.GlucoseCircleComplication"
+                primaryProviderType="SMALL_IMAGE"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingOval x="0" y="0" width="236" height="236" />
+            <Complication type="SMALL_IMAGE">
+                <PartImage x="0" y="0" width="236" height="236">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Image resource="[COMPLICATION.SMALL_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <!-- The ambient reading. Invisible while awake, but it gets the taps on the circle. -->
+        <ComplicationSlot
+            name="GlucoseCircleAmbient"
+            slotId="1"
+            displayName="Glucose circle always-on"
+            isCustomizable="FALSE"
+            supportedTypes="SHORT_TEXT EMPTY"
+            alpha="0"
+            x="107" y="50" width="236" height="236">
+            <Variant mode="AMBIENT" target="alpha" value="255" />
+            <DefaultProviderPolicy
+                primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.circle.GlucoseCircleAmbientComplication"
+                primaryProviderType="SHORT_TEXT"
+                defaultSystemProvider="EMPTY"
+                defaultSystemProviderType="EMPTY" />
+            <BoundingOval x="0" y="0" width="236" height="236" />
+            <Complication type="SHORT_TEXT">
+                <PartText x="16" y="70" width="204" height="64">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="54" weight="NORMAL" slant="NORMAL" color="#ffdcdcdc">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+                <PartText x="34" y="136" width="168" height="32">
+                    <Text align="CENTER" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="25" weight="NORMAL" slant="NORMAL" color="#ffb4b4b4">
+                            <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <!-- Time, also in ambient mode -->
+        <DigitalClock x="75" y="310" width="300" height="70">
+            <TimeText align="CENTER" format="hh:mm" hourFormat="SYNC_TO_DEVICE"
+                x="0" y="0" width="300" height="70">
+                <Font color="#fff3f5fa" family="SYNC_TO_DEVICE" size="64" slant="NORMAL" weight="NORMAL" />
+            </TimeText>
+        </DigitalClock>
+
+        <!-- AM or PM on a 12-hour device: TimeText cannot draw it -->
+        <Condition>
+            <Expressions>
+                <Expression name="twelveHourClock">[IS_24_HOUR_MODE] == 0</Expression>
+            </Expressions>
+            <Compare expression="twelveHourClock">
+                <PartText x="318" y="334" width="50" height="26">
+                    <Variant mode="AMBIENT" target="alpha" value="0" />
+                    <Text align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="18" weight="NORMAL" slant="NORMAL" color="#ff9aa3b5">
+                            <Template>%s<Parameter expression="[AMPM_STRING]" /></Template>
+                        </Font>
+                    </Text>
+                </PartText>
+            </Compare>
+        </Condition>
+
+        <!-- Date -->
+        <PartText x="115" y="377" width="220" height="26">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <Text align="CENTER" ellipsis="TRUE">
+                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ff9aa3b5">
+                    <Template>%s %s %s<Parameter expression="[DAY_OF_WEEK_S]" /><Parameter expression="[DAY]" /><Parameter expression="[MONTH_S]" /></Template>
+                </Font>
+            </Text>
+        </PartText>
+
+        <!-- Dials: empty on the left, IOB on the right -->
+
+        <ComplicationSlot
+            name="DialLeft"
+            slotId="2"
+            displayName="@string/dial_left"
+            isCustomizable="TRUE"
+            supportedTypes="SHORT_TEXT RANGED_VALUE GOAL_PROGRESS MONOCHROMATIC_IMAGE SMALL_IMAGE EMPTY"
+            alpha="255"
+            x="38" y="226" width="108" height="108">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+            <BoundingOval x="0" y="0" width="108" height="108" />
+            <Complication type="SHORT_TEXT">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="220">
+                        <Stroke color="#ffa9b4ff" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="220 + 280 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="220">
+                        <Stroke color="#ffa9b4ff" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="220 + 280 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartImage x="28" y="28" width="51" height="51" tintColor="#ffa9b4ff">
+                    <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="SMALL_IMAGE">
+                <PartImage x="8" y="8" width="93" height="93">
+                    <Image resource="[COMPLICATION.SMALL_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            name="DialRight"
+            slotId="4"
+            displayName="@string/dial_right"
+            isCustomizable="TRUE"
+            supportedTypes="SHORT_TEXT RANGED_VALUE GOAL_PROGRESS MONOCHROMATIC_IMAGE SMALL_IMAGE EMPTY"
+            alpha="255"
+            x="304" y="226" width="108" height="108">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.IobIconComplication" primaryProviderType="SHORT_TEXT" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+            <BoundingOval x="0" y="0" width="108" height="108" />
+            <Complication type="SHORT_TEXT">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="220">
+                        <Stroke color="#ffa9b4ff" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="220 + 280 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="220">
+                        <Stroke color="#ffa9b4ff" thickness="4" cap="ROUND" />
+                        <Transform target="endAngle" value="220 + 280 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="iconAndText"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                        <Expression name="titleAndText"><![CDATA[[COMPLICATION.TITLE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="iconAndText">
+                        <PartImage x="39" y="17" width="31" height="31" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                        <PartText x="5" y="49" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Compare expression="titleAndText">
+                        <PartText x="10" y="22" width="87" height="26">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="17" weight="SEMI_BOLD" slant="NORMAL" color="#ffa9b4ff">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TITLE]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                        <PartText x="5" y="46" width="98" height="39">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="28" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Compare>
+                    <Default>
+                        <PartText x="5" y="33" width="98" height="41">
+                            <Text align="CENTER" ellipsis="TRUE">
+                                <Font family="SYNC_TO_DEVICE" size="31" weight="SEMI_BOLD" slant="NORMAL" color="#fff3f5fa">
+                                    <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                                </Font>
+                            </Text>
+                        </PartText>
+                    </Default>
+                </Condition>
+            </Complication>
+            <Complication type="MONOCHROMATIC_IMAGE">
+                <PartDraw x="0" y="0" width="108" height="108">
+                    <Ellipse x="0" y="0" width="108" height="108">
+                        <Fill color="#ff10141c" />
+                        <Stroke color="#1fffffff" thickness="1.5" />
+                    </Ellipse>
+                    <Arc centerX="54" centerY="54" width="90" height="90" startAngle="220" endAngle="500">
+                        <Stroke color="#17ffffff" thickness="4" cap="ROUND" />
+                    </Arc>
+                </PartDraw>
+                <PartImage x="28" y="28" width="51" height="51" tintColor="#ffa9b4ff">
+                    <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="SMALL_IMAGE">
+                <PartImage x="8" y="8" width="93" height="93">
+                    <Image resource="[COMPLICATION.SMALL_IMAGE]" />
+                </PartImage>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <!-- Edge slots: watch battery, steps, reservoir and rig battery by default -->
+
+        <ComplicationSlot
+            name="EdgeTopLeft"
+            slotId="5"
+            displayName="@string/edge_top_left"
+            isCustomizable="TRUE"
+            supportedTypes="RANGED_VALUE GOAL_PROGRESS SHORT_TEXT EMPTY"
+            alpha="255"
+            x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy defaultSystemProvider="WATCH_BATTERY" defaultSystemProviderType="RANGED_VALUE" />
+            <BoundingArc centerX="225" centerY="225" width="410" height="410" thickness="56" startAngle="280" endAngle="344" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="296" endAngle="340">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="296" endAngle="296">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="296 + 44 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="48" y="121" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="304" endAngle="340" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="296" endAngle="340">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="296" endAngle="296">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="296 + 44 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="48" y="121" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="304" endAngle="340" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="48" y="121" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="304" endAngle="340" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            name="EdgeTopRight"
+            slotId="6"
+            displayName="@string/edge_top_right"
+            isCustomizable="TRUE"
+            supportedTypes="RANGED_VALUE GOAL_PROGRESS SHORT_TEXT EMPTY"
+            alpha="255"
+            x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy defaultSystemProvider="STEP_COUNT" defaultSystemProviderType="SHORT_TEXT" />
+            <BoundingArc centerX="225" centerY="225" width="410" height="410" thickness="56" startAngle="4" endAngle="68" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="20" endAngle="64">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="20" endAngle="20">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="20 + 44 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="293" y="39" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="28" endAngle="64" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="20" endAngle="64">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="20" endAngle="20">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="20 + 44 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="293" y="39" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="28" endAngle="64" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="293" y="39" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="376" height="376" startAngle="28" endAngle="64" direction="CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            name="EdgeBottomRight"
+            slotId="7"
+            displayName="@string/edge_bottom_right"
+            isCustomizable="TRUE"
+            supportedTypes="RANGED_VALUE GOAL_PROGRESS SHORT_TEXT EMPTY"
+            alpha="255"
+            x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.ReservoirComplication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+            <BoundingArc centerX="225" centerY="225" width="410" height="410" thickness="56" startAngle="114" endAngle="170" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="130" endAngle="166">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="130" endAngle="130">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="130 + 36 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="272" y="394" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="158" endAngle="130" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="130" endAngle="166">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="130" endAngle="130">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="130 + 36 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="272" y="394" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="158" endAngle="130" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="272" y="394" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="158" endAngle="130" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+        <ComplicationSlot
+            name="EdgeBottomLeft"
+            slotId="8"
+            displayName="@string/edge_bottom_left"
+            isCustomizable="TRUE"
+            supportedTypes="RANGED_VALUE GOAL_PROGRESS SHORT_TEXT EMPTY"
+            alpha="255"
+            x="0" y="0" width="450" height="450">
+            <Variant mode="AMBIENT" target="alpha" value="0" />
+            <DefaultProviderPolicy primaryProvider="AAPS_WEAR_APP_ID/app.aaps.wear.complications.UploaderBatteryComplication" primaryProviderType="RANGED_VALUE" defaultSystemProvider="EMPTY" defaultSystemProviderType="EMPTY" />
+            <BoundingArc centerX="225" centerY="225" width="410" height="410" thickness="56" startAngle="178" endAngle="234" />
+            <Complication type="RANGED_VALUE">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="194" endAngle="230">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="194" endAngle="194">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="194 + 36 * clamp(([COMPLICATION.RANGED_VALUE_VALUE] - [COMPLICATION.RANGED_VALUE_MIN]) / ([COMPLICATION.RANGED_VALUE_MAX] - [COMPLICATION.RANGED_VALUE_MIN]), 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="80" y="345" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="222" endAngle="194" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="GOAL_PROGRESS">
+                <PartDraw x="0" y="0" width="450" height="450">
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="194" endAngle="230">
+                        <Stroke color="#1affffff" thickness="7" cap="ROUND" />
+                    </Arc>
+                    <Arc centerX="225" centerY="225" width="414" height="414" startAngle="194" endAngle="194">
+                        <Stroke color="#ffa9b4ff" thickness="7" cap="ROUND" />
+                        <Transform target="endAngle" value="194 + 36 * clamp([COMPLICATION.GOAL_PROGRESS_VALUE] / [COMPLICATION.GOAL_PROGRESS_TARGET_VALUE], 0, 1)" />
+                    </Arc>
+                </PartDraw>
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="80" y="345" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="222" endAngle="194" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="SHORT_TEXT">
+                <Condition>
+                    <Expressions>
+                        <Expression name="hasIcon"><![CDATA[[COMPLICATION.MONOCHROMATIC_IMAGE] != null]]></Expression>
+                    </Expressions>
+                    <Compare expression="hasIcon">
+                        <PartImage x="80" y="345" width="18" height="18" tintColor="#ffa9b4ff">
+                            <Image resource="[COMPLICATION.MONOCHROMATIC_IMAGE]" />
+                        </PartImage>
+                    </Compare>
+                </Condition>
+                <PartText x="0" y="0" width="450" height="450">
+                    <TextCircular centerX="225" centerY="225" width="384" height="384" startAngle="222" endAngle="194" direction="COUNTER_CLOCKWISE" align="START" ellipsis="TRUE">
+                        <Font family="SYNC_TO_DEVICE" size="15" weight="SEMI_BOLD" slant="NORMAL" color="#ffc6cddd">
+                            <Template>%s<Parameter expression="[COMPLICATION.TEXT]" /></Template>
+                        </Font>
+                    </TextCircular>
+                </PartText>
+            </Complication>
+            <Complication type="EMPTY" />
+        </ComplicationSlot>
+
+    </Scene>
+</WatchFace>

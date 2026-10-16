@@ -44,6 +44,7 @@ import app.aaps.wear.complications.IobDetailedComplication
 import app.aaps.wear.complications.IobIconComplication
 import app.aaps.wear.complications.LongStatusComplication
 import app.aaps.wear.complications.LongStatusFlippedComplication
+import app.aaps.wear.complications.ReservoirComplication
 import app.aaps.wear.complications.RunningModeComplication
 import app.aaps.wear.complications.SgvComplication
 import app.aaps.wear.complications.SgvComplicationExt1
@@ -51,6 +52,8 @@ import app.aaps.wear.complications.SgvComplicationExt2
 import app.aaps.wear.complications.SgvLargeComplication
 import app.aaps.wear.complications.TargetComplication
 import app.aaps.wear.complications.UploaderBatteryComplication
+import app.aaps.wear.complications.circle.GlucoseCircleAmbientComplication
+import app.aaps.wear.complications.circle.GlucoseCircleComplication
 import app.aaps.wear.data.ComplicationDataRepository
 import app.aaps.wear.interaction.WatchfaceConfigurationActivity
 import app.aaps.wear.interaction.actions.AcceptActivity
@@ -184,11 +187,11 @@ class DataHandlerWear(
         }
         onEvent<EventData.OpenLoopRequest> { handleOpenLoopRequest(it) }
         onEvent<EventData.OpenSettings> {
-            // The Display screen holds the settings of the code-based faces. With the complications
-            // face installed through Watch Face Push nothing there is the wearer's, so the phone's
+            // The Display screen holds the settings of the code-based faces. With a built-in face
+            // installed through Watch Face Push nothing there is the wearer's, so the phone's
             // button opens the main settings menu instead, from which every screen is reachable
             val target =
-                if (watchFacePushHelper.isSupported() && watchFacePushHelper.selectedFace == PushedFace.WFS) PreferenceMenuActivity::class.java
+                if (watchFacePushHelper.isSupported() && watchFacePushHelper.selectedFace != PushedFace.CWF) PreferenceMenuActivity::class.java
                 else WatchfaceConfigurationActivity::class.java
             context.startActivity(Intent(context, target).apply { addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) })
         }
@@ -461,6 +464,9 @@ class DataHandlerWear(
             // behind the value drawn in the face itself.
             CwfAmbientBgComplication::class.java,
             CwfAmbientStatusComplication::class.java,
+            // Glucose circle face
+            GlucoseCircleComplication::class.java,
+            GlucoseCircleAmbientComplication::class.java,
             // Long status complications (show detailed glucose + status info)
             LongStatusComplication::class.java,
             LongStatusFlippedComplication::class.java,
@@ -481,6 +487,7 @@ class DataHandlerWear(
             BrCobIobComplicationExt2::class.java,
             // Battery complication
             UploaderBatteryComplication::class.java,
+            ReservoirComplication::class.java,
             // Running mode complication
             RunningModeComplication::class.java
             // Note: WallpaperComplication is abstract, subclasses will auto-update

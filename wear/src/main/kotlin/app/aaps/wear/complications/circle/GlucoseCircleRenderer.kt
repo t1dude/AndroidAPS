@@ -23,8 +23,18 @@ data class GlucoseCircleInput(
     val trendArrow: TrendArrow?,
     val hasBg: Boolean,
     val deltaText: String,
-    val timeAgoText: String
+    val timeAgoText: String,
+    /** The watch read this value from the sensor itself (direct-to-watch): a sensor icon goes before the age. */
+    val fromSensor: Boolean = false
 )
+
+/** Where the sensor icon and the age text go on their shared line, centred together on [centre]. */
+internal data class SensorIconLine(val iconCentreX: Float, val textCentreX: Float)
+
+internal fun sensorIconLine(centre: Float, textWidth: Float, iconSize: Float, gap: Float): SensorIconLine {
+    val start = centre - (iconSize + gap + textWidth) / 2f
+    return SensorIconLine(iconCentreX = start + iconSize / 2f, textCentreX = start + iconSize + gap + textWidth / 2f)
+}
 
 /** Where the trend arc sits on the ring and how many arrow heads it has, as on the phone (`BgInfoSection`) */
 internal data class ArcIndicator(val centerAngle: Float, val sweepAngle: Float, val triangleCount: Int)
@@ -71,6 +81,10 @@ object GlucoseCircleRenderer {
     const val SMALL_SP = 17f
     const val LINE_GAP_DP = -4f
     const val LIFT_DP = 2f
+
+    /** The sensor icon: as tall as the small text's capital letters, a little space before the age. */
+    const val SENSOR_ICON_SCALE = 0.75f
+    const val SENSOR_ICON_GAP_DP = 4f
 
     const val RING_ALPHA = (0.3f * 255).toInt()
 
@@ -144,9 +158,31 @@ object GlucoseCircleRenderer {
         val heights = lines.map { (_, paint) -> paint.descent() - paint.ascent() }
         var top = centre - (heights.sum() + gap * (lines.size - 1)) / 2f - LIFT_DP * unit
         lines.forEachIndexed { i, (text, paint) ->
-            canvas.drawText(text, centre, top - paint.ascent(), paint)
+            val baseline = top - paint.ascent()
+            if (input.fromSensor && paint === time) drawAgeWithSensorIcon(canvas, centre, unit, text, baseline, paint)
+            else canvas.drawText(text, centre, baseline, paint)
             top += heights[i] + gap
         }
+    }
+
+    /** The age line with a sensor seen from above before it: a ring with a dot in the middle. */
+    private fun drawAgeWithSensorIcon(canvas: Canvas, centre: Float, unit: Float, text: String, baseline: Float, paint: Paint) {
+        val iconSize = SMALL_SP * unit * SENSOR_ICON_SCALE
+        val line = sensorIconLine(centre, paint.measureText(text), iconSize, SENSOR_ICON_GAP_DP * unit)
+        canvas.drawText(text, line.textCentreX, baseline, paint)
+        // Centred on the digits, which sit between the baseline and the cap height
+        val iconCentreY = baseline - iconSize / 2f
+        val ring = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.STROKE
+            strokeWidth = iconSize * 0.16f
+            color = paint.color
+        }
+        canvas.drawCircle(line.iconCentreX, iconCentreY, (iconSize - ring.strokeWidth) / 2f, ring)
+        val dot = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+            style = Paint.Style.FILL
+            color = paint.color
+        }
+        canvas.drawCircle(line.iconCentreX, iconCentreY, iconSize * 0.18f, dot)
     }
 
     private fun textPaint(sizePx: Float, @ColorInt colour: Int, bold: Boolean) = Paint(Paint.ANTI_ALIAS_FLAG).apply {

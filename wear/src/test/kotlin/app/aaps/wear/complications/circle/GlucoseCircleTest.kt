@@ -71,4 +71,12 @@ class GlucoseCircleTest {
     fun `an unknown level is drawn as in range`() {
         assertThat(GlucoseCircleComplication.circleColor(7L)).isEqualTo(GlucoseCircleComplication.IN_RANGE_COLOR)
     }
+
+    @Test
+    fun `the sensor icon and the age are centred together, icon first`() {
+        val line = sensorIconLine(centre = 100f, textWidth = 60f, iconSize = 10f, gap = 4f)
+        // 10 + 4 + 60 = 74 wide, so the line runs from 63 to 137
+        assertThat(line.iconCentreX).isEqualTo(68f)
+        assertThat(line.textCentreX).isEqualTo(107f)
+    }
 }

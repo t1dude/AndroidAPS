@@ -350,4 +350,11 @@ interface Pump {
      * Pump is connected via RileyLink
      */
     fun isUseRileyLinkBatteryLevel(): Boolean = false
+
+    /**
+     * When the pod or patch stops giving insulin, in epoch millis.
+     *
+     * Null when the pump does not know it, or has no pod or patch running.
+     */
+    fun expiresAt(): Long? = null
 }

@@ -153,6 +153,12 @@ fun SecondaryGraphCompose(
     onVisibleRangeChanged: ((Pair<Double, Double>?) -> Unit)? = null,
     /** While holding the BG graph, a line at the inspected time. Null turns it off. */
     inspect: GraphInspectState? = null,
+    /** True shows the hour labels under the graph (Circle home screen: the last graph only). The hour lines stay. */
+    showTimeLabels: Boolean = false,
+    /** Part of the height the basal overlay takes at the top. The rest is for IOB. */
+    basalHeightFraction: Double = BASAL_HEIGHT_FRACTION,
+    /** Circle home screen: lighter axis style and a softer IOB fill. */
+    softStyle: Boolean = false,
     modifier: Modifier = Modifier
 ) {
     val dateUtil = LocalDateUtil.current
@@ -451,10 +457,10 @@ fun SecondaryGraphCompose(
     // Result pairs the final (inflated) axis range with the un-inflated data max — the latter is
     // where tick labels must stop (see ClampedVerticalAxisItemPlacer) so they don't extend into
     // the reserved basal band above the actual IOB data.
-    val iobBasalScaleResult = remember(hasBasalLayer, primaryDataNiceRange) {
+    val iobBasalScaleResult = remember(hasBasalLayer, primaryDataNiceRange, basalHeightFraction) {
         if (!hasBasalLayer) return@remember null // auto-range when no basal
         val nice = primaryDataNiceRange ?: return@remember null
-        val axisMax = nice.min + (nice.max - nice.min) / (1 - BASAL_HEIGHT_FRACTION)
+        val axisMax = nice.min + (nice.max - nice.min) / (1 - basalHeightFraction)
         NiceScale(nice.min, axisMax, nice.step) to nice.max
     }
     val iobBasalScale = iobBasalScaleResult?.first
@@ -554,7 +560,7 @@ fun SecondaryGraphCompose(
     // =========================================================================
 
     val seriesColors = rememberSeriesColors()
-    val iobLineStyle = rememberIobLineStyles()
+    val iobLineStyle = rememberIobLineStyles(softFill = softStyle)
     val cobLineStyle = rememberCobLineStyles()
     val normalizerLine = remember { createNormalizerLine() }
 
@@ -617,7 +623,7 @@ fun SecondaryGraphCompose(
     val bottomAxisItemPlacer = rememberBottomAxisItemPlacer(minTimestamp)
     val nowLineColor = MaterialTheme.colorScheme.onSurface
     val nowLine = rememberNowLine(minTimestamp, nowTimestamp, nowLineColor)
-    val inspectLine = rememberInspectLine(inspect)
+    val inspectLine = rememberInspectLine(inspect, soft = softStyle)
     val decorations = remember(nowLine, visibleRangeReporter, inspectLine) { listOfNotNull(nowLine, visibleRangeReporter, inspectLine) }
 
     // Dual-axis zero alignment.
@@ -757,7 +763,7 @@ fun SecondaryGraphCompose(
     // Basal range: 0 at top, -basalMaxY at bottom → basal occupies the top BASAL_HEIGHT_FRACTION of the height.
     // Windowed to the visible scroll/zoom range, like the primary IOB scale above, so basal doesn't
     // stay flattened/clipped when scrolled away from the loaded range's peak.
-    val basalMaxY = remember(basalData, processedBasalProfile, processedBasalActual, visibleMinX, visibleMaxX) {
+    val basalMaxY = remember(basalData, processedBasalProfile, processedBasalActual, visibleMinX, visibleMaxX, basalHeightFraction) {
         if (basalData == null || basalData.maxBasal <= 0.0) return@remember 1.0
         // Profile/actual are stored sparsely (only at rate changes — see rebuildBasalGraph), so a
         // zoom window entirely inside one constant segment (e.g. an extended zero-temp) can contain
@@ -778,7 +784,7 @@ fun SecondaryGraphCompose(
             visibleMinX?.let { stepValueAt(processedBasalActual, it) }
         )
         val windowedAbsMax = (literalWindowed + hiddenValues).map { -it }.maxOrNull()
-        (windowedAbsMax?.takeIf { it > 0.0 } ?: hiddenValues.maxOfOrNull { -it } ?: basalData.maxBasal) / BASAL_HEIGHT_FRACTION
+        (windowedAbsMax?.takeIf { it > 0.0 } ?: hiddenValues.maxOfOrNull { -it } ?: basalData.maxBasal) / basalHeightFraction
     }
     val basalRangeProvider = remember(maxX, basalMaxY) {
         CartesianLayerRangeProvider.fixed(minX = 0.0, maxX = maxX, minY = -basalMaxY, maxY = 0.0)
@@ -886,21 +892,34 @@ fun SecondaryGraphCompose(
         }
     }
 
+    // Circle home screen style: smaller grey axis labels, faint horizontal lines only (no hour lines)
+    val axisLabelStyle = if (softStyle) {
+        TextStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = MaterialTheme.typography.labelSmall.fontSize)
+    } else TextStyle(color = MaterialTheme.colorScheme.onSurface)
+    val yGuideline = LineComponent(fill = Fill(MaterialTheme.colorScheme.outlineVariant.copy(alpha = if (softStyle) 0.25f else 0.5f)))
+    val xGuideline = if (softStyle) null else LineComponent(fill = Fill(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+
     val startAxis = VerticalAxis.rememberStart(
         itemPlacer = startAxisItemPlacer,
         label = rememberTextComponent(
-            style = TextStyle(color = MaterialTheme.colorScheme.onSurface),
+            style = axisLabelStyle,
             minWidth = TextComponent.MinWidth.fixed(30.dp)
         ),
-        guideline = LineComponent(fill = Fill(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+        guideline = yGuideline
     )
-    // No time labels: the BG graph above shows them, and the hour lines stay aligned with it.
-    // This keeps the graphs below BG compact.
-    val bottomAxis = HorizontalAxis.rememberBottom(
+    // No time labels by default: the BG graph above shows them, and the hour lines stay aligned with it.
+    // This keeps the graphs below BG compact. The Circle home screen shows them under the last graph.
+    val timeFormatter = rememberTimeFormatter(minTimestamp)
+    val bottomAxis = if (showTimeLabels) HorizontalAxis.rememberBottom(
+        valueFormatter = timeFormatter,
+        itemPlacer = bottomAxisItemPlacer,
+        label = rememberTextComponent(style = axisLabelStyle),
+        guideline = xGuideline
+    ) else HorizontalAxis.rememberBottom(
         itemPlacer = bottomAxisItemPlacer,
         label = null,
         tick = null,
-        guideline = LineComponent(fill = Fill(MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f)))
+        guideline = xGuideline
     )
 
     if (hasBasalLayer) {
@@ -1271,31 +1290,34 @@ data class IobLineStyles(
 )
 
 @Composable
-fun rememberIobLineStyles(): IobLineStyles {
+fun rememberIobLineStyles(softFill: Boolean = false): IobLineStyles {
+    // softFill = Circle home screen style: lighter IOB fill and smaller bolus labels
     val iobColor = AapsTheme.generalColors.iobPrediction
     val smbColor = AapsTheme.elementColors.insulin
     val extBolusColor = AapsTheme.elementColors.extendedBolus
     val decimalFormatter = LocalDecimalFormatter.current
 
-    val bolusLabelComponent = remember(smbColor) {
-        TextComponent(textStyle = TextStyle(color = smbColor, fontSize = 16.sp))
+    // Circle home screen: bolus amounts in the same size as the axis labels, still in the insulin color
+    val labelFontSize = if (softFill) MaterialTheme.typography.labelSmall.fontSize else 16.sp
+    val bolusLabelComponent = remember(smbColor, labelFontSize) {
+        TextComponent(textStyle = TextStyle(color = smbColor, fontSize = labelFontSize))
     }
     val bolusValueFormatter = remember {
         CartesianValueFormatter { _, value, _ -> formatBolusLabel(value, decimalFormatter) }
     }
-    val extBolusLabelComponent = remember(extBolusColor) {
-        TextComponent(textStyle = TextStyle(color = extBolusColor, fontSize = 16.sp))
+    val extBolusLabelComponent = remember(extBolusColor, labelFontSize) {
+        TextComponent(textStyle = TextStyle(color = extBolusColor, fontSize = labelFontSize))
     }
     val extBolusValueFormatter = remember {
         CartesianValueFormatter { _, value, _ -> formatBolusLabel(value, decimalFormatter) }
     }
 
-    return remember(iobColor, smbColor, extBolusColor, bolusLabelComponent, bolusValueFormatter, extBolusLabelComponent, extBolusValueFormatter) {
+    return remember(iobColor, smbColor, extBolusColor, bolusLabelComponent, bolusValueFormatter, extBolusLabelComponent, extBolusValueFormatter, softFill) {
         IobLineStyles(
             iobLine = LineCartesianLayer.Line(
                 fill = LineCartesianLayer.LineFill.single(Fill(iobColor)),
                 areaFill = LineCartesianLayer.AreaFill.single(
-                    Fill(Brush.verticalGradient(listOf(iobColor.copy(alpha = 1f), Color.Transparent)))
+                    Fill(Brush.verticalGradient(listOf(iobColor.copy(alpha = if (softFill) 0.35f else 1f), Color.Transparent)))
                 ),
                 interpolator = Square
             ),

@@ -323,6 +323,10 @@
     <string name="a11y_quick_launch_add" comment="Screen-reader label of the button that adds an action to the QuickLaunch bar. %1$s=the action name. Example: Add Bolus wizard">Add %1$s</string>
     <string name="a11y_quick_launch_remove" comment="Screen-reader label of the button that removes an action from the QuickLaunch bar. %1$s=the action name. Example: Remove Bolus wizard">Remove %1$s</string>
     <string name="quick_launch_no_dynamic_items">No items available</string>
+    <string name="quick_launch_category_menus">Menus</string>
+    <string name="temp_target_list">Temporary Target List</string>
+    <string name="circle_chips_title">Buttons under the circle</string>
+    <string name="temp_target_list_summary" comment="One temp target preset in the list. %1$s=target with unit, %2$s=duration. Example: 8.0 mmol/l for 1 h">%1$s for %2$s</string>
     <string name="quick_launch_category_treatment">Treatment</string>
     <string name="quick_launch_category_care">Care Portal</string>
     <string name="quick_launch_category_profile">Profile</string>

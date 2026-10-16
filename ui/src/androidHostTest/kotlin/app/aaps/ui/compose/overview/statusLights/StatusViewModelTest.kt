@@ -12,6 +12,7 @@ import app.aaps.core.interfaces.pump.PumpInsulin
 import app.aaps.core.interfaces.pump.PumpWithConcentration
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventAPSCalculationFinished
 import app.aaps.core.interfaces.rx.events.EventConfigBuilderChange
 import app.aaps.core.interfaces.rx.events.EventInitializationChanged
 import app.aaps.core.interfaces.rx.events.EventNsClientStatusUpdated
@@ -83,6 +84,7 @@ internal class StatusViewModelTest {
         whenever(rxBus.toFlow(EventInitializationChanged::class)).thenReturn(emptyFlow())
         whenever(rxBus.toFlow(EventConfigBuilderChange::class)).thenReturn(emptyFlow())
         whenever(rxBus.toFlow(EventNsClientStatusUpdated::class)).thenReturn(emptyFlow())
+        whenever(rxBus.toFlow(EventAPSCalculationFinished::class)).thenReturn(emptyFlow())
         whenever(persistenceLayer.observeChanges(TE::class)).thenReturn(teChanges)
         whenever(persistenceLayer.databaseClearedFlow).thenReturn(emptyFlow())
     }

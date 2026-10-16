@@ -58,6 +58,7 @@ import app.aaps.core.interfaces.overview.graph.SecondaryGraph
 import app.aaps.core.interfaces.overview.graph.SeriesType
 import app.aaps.core.keys.interfaces.TextRef
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.LocalDateUtil
 import app.aaps.core.ui.compose.LocalDecimalFormatter
 import app.aaps.core.ui.compose.LocalProfileUtil
@@ -213,7 +214,25 @@ fun GraphsSection(
      * announcing them beside a past day would state something untrue about insulin.
      */
     iobText: String? = null,
-    cobText: String? = null
+    cobText: String? = null,
+    /** True shows the hour labels only under the last graph, not under the BG graph. */
+    timeLabelsOnLastGraphOnly: Boolean = false,
+    /** False hides the thin belt above the BG graph that shows running mode and therapy events. */
+    showTreatmentBelt: Boolean = true,
+    /** Part of the IOB graph height used by basal. */
+    iobGraphBasalFraction: Double = BASAL_HEIGHT_FRACTION,
+    /** False hides the "IOB / Basal" name in the corner of the IOB graph. */
+    showIobGraphLabel: Boolean = true,
+    horizontalPadding: Dp = 16.dp,
+    /** How many minutes the graphs show when opened, and after the reset on a new reading. */
+    defaultVisibleMinutes: Double = DEFAULT_GRAPH_ZOOM_MINUTES,
+    /** Drawn behind the graphs only, not behind the Add graph button (Circle home screen panel). */
+    graphsBackground: Modifier = Modifier,
+    /**
+     * Circle home screen look: BG in the soft watchface colors with thin target range lines, lighter
+     * axes on every graph, a softer IOB fill, and a small gap between the graphs.
+     */
+    circleStyle: Boolean = false
 ) {
     val dateUtil = LocalDateUtil.current
     val savedGraphConfig by graphViewModel.graphConfigFlow.collectAsStateWithLifecycle()
@@ -225,7 +244,7 @@ fun GraphsSection(
     // by reference, so passing a freshly-allocated Zoom on every recomposition of this composable
     // tears down and recreates the VicoZoomState — resetting the zoom level back to initialZoom.
     // Memoize these once so all zoom states below stay stable across recompositions.
-    val defaultZoom = remember { Zoom.x(DEFAULT_GRAPH_ZOOM_MINUTES) }
+    val defaultZoom = remember(defaultVisibleMinutes) { Zoom.x(defaultVisibleMinutes) }
     val bgMinZoom = remember { Zoom.x(Constants.GRAPH_TIME_RANGE_HOURS * 60.0) }
     val bgMaxZoom = remember { Zoom.x(MIN_GRAPH_ZOOM_MINUTES) }
 
@@ -427,7 +446,8 @@ fun GraphsSection(
             // Only read states that are attached to a chart (belt + IOB fixed + active secondary)
             val count = activeCount
             buildList {
-                add(beltScrollState.value to beltZoomState.value)
+                // A belt that is not drawn never moves, so it would always look out of sync.
+                if (showTreatmentBelt) add(beltScrollState.value to beltZoomState.value)
                 add(iobScrollState.value to iobZoomState.value)
                 for (i in 0 until count) {
                     add(secScrollStates[i].value to secZoomStates[i].value)
@@ -459,330 +479,352 @@ fun GraphsSection(
     // Set by the BG graph, read by every graph
     val inspect = remember { GraphInspectState() }
 
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
-    ) {
-        // Treatment Belt Graph - running mode background + therapy events
-        TreatmentBeltGraphCompose(
-            viewModel = graphViewModel,
-            inspect = inspect,
-            scrollState = beltScrollState,
-            zoomState = beltZoomState,
-            derivedTimeRange = derivedTimeRange,
-            nowTimestamp = nowTimestamp,
-            modifier = Modifier.fillMaxWidth()
-        )
-        // BG Graph - primary interactive graph
-        var editingBgOverlays by remember { mutableStateOf(false) }
-
-        // The graph is drawn, so a screen reader gets nothing from it at all - a chart contributes
-        // no semantics node of its own. Describe it instead: the recent readings newest first,
-        // because the current value is what matters most and a listener may stop there, plus what
-        // is on board. The description goes on the graph itself rather than the Box, so the edit
-        // button beside it stays a separate control.
-        val bgReadings by graphViewModel.bgReadingsFlow.collectAsStateWithLifecycle()
-        val profileUtil = LocalProfileUtil.current
-        val decimalFormatter = LocalDecimalFormatter.current
-        val recentValues = remember(bgReadings, profileUtil.units) {
-            // BgDataPoint.value is ALREADY in the user's units, so it must not be converted again -
-            // only formatted. The unit decides the decimals; the "detect" helpers guess that from
-            // the magnitude and would read a very high mmol/l reading as mg/dl.
-            newestReadings(bgReadings, RECENT_VALUES_SPOKEN)
-                .joinToString(", ") {
-                    if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(it.value)
-                    else decimalFormatter.to1Decimal(it.value)
-                }
-        }
-        val graphDescription = when {
-            recentValues.isEmpty()                 -> null
-            iobText != null && cobText != null     -> stringResource(
-                UiStrings.a11y_bg_graph_summary,
-                recentValues,
-                stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.iob), iobText),
-                stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.cob), cobText)
-            )
-
-            else                                   -> stringResource(UiStrings.a11y_bg_graph_summary_values_only, recentValues)
-        }
-
-        // The predicted curves are drawn and nothing else on the screen states them, so they were
-        // out of reach entirely. Each curve gets one sentence naming where it is heading, which is
-        // what a listener can actually hold in their head - reading a whole series of points back
-        // would be unusable. Reported as the biggest excursion from the current glucose rather than
-        // the final point, because a curve that dips to 3.2 before settling at 6.0 matters for the
-        // dip, and that is the reading of "heading up to" or "down to" a user means.
-        val currentValue = remember(bgReadings) { newestReadings(bgReadings, 1).firstOrNull()?.value }
-        val unitLabel = if (profileUtil.units == GlucoseUnit.MMOL) stringResource(CoreUiStrings.mmol) else stringResource(CoreUiStrings.mgdl)
-        // Nothing is said about curves the user has switched off the graph.
-        val predictionsVisible = SeriesType.PREDICTIONS in graphConfig.bgOverlays
-        val predictionExtremes = remember(predictions, currentValue, predictionsVisible) {
-            if (!predictionsVisible || currentValue == null) emptyList()
-            else PREDICTION_SPOKEN_ORDER.mapNotNull { (type, name) ->
-                predictionExtreme(predictions.filter { it.type == type }.map { it.value }, currentValue)
-                    ?.let { (value, direction) -> Triple(name, value, direction) }
-            }
-        }
-        // map, not joinToString: the latter is not inline, so a @Composable call cannot sit in its
-        // lambda. The finished sentences are joined afterwards, as the graph summary joins its values.
-        val predictionSentences = predictionExtremes.map { (name, value, direction) ->
-            // BgDataPoint.value is ALREADY in the user's units, as above: format, never convert.
-            val shown = stringResource(
-                CoreUiStrings.value_with_unit,
-                if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(value) else decimalFormatter.to1Decimal(value),
-                unitLabel
-            )
-            when (direction) {
-                PredictionDirection.UP   -> stringResource(UiStrings.a11y_prediction_rises, stringResource(name), shown)
-                PredictionDirection.DOWN -> stringResource(UiStrings.a11y_prediction_falls, stringResource(name), shown)
-                PredictionDirection.FLAT -> stringResource(UiStrings.a11y_prediction_flat, stringResource(name), shown)
-            }
-        }
-        val predictionDescription =
-            if (predictionSentences.isEmpty()) null
-            else stringResource(UiStrings.a11y_predictions, predictionSentences.joinToString(" "))
-
-        Box(
+    Column(modifier = modifier.fillMaxWidth()) {
+        // The graphs only: graphsBackground goes behind them and not behind the Add button below
+        Column(
             modifier = Modifier
-                .offset(y = (-16).dp)
-                .graphInspectTouch(inspect)
+                .fillMaxWidth()
+                .then(graphsBackground)
+                .padding(horizontal = horizontalPadding, vertical = 8.dp)
         ) {
-            BgGraphCompose(
-                viewModel = graphViewModel,
-                bgOverlays = graphConfig.bgOverlays,
-                scrollState = bgScrollState,
-                zoomState = bgZoomState,
-                derivedTimeRange = derivedTimeRange,
-                nowTimestamp = nowTimestamp,
-                visibleTimeRange = bgVisibleTimeRange,
-                inspect = inspect,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(graphConfig.bgHeight.dp)
-                    .onScrollOrZoomGesture(graphViewModel::onGraphInteraction)
-                    .then(
-                        // Merging, not a bare semantics block: a described node is reached by linear
-                        // screen-reader navigation only when it is a leaf or a merging parent. This one
-                        // has a child (the chart's own node, which carries no text), so unmerged it was
-                        // skipped in both directions and could be reached only as the first step from
-                        // the glucose circle or at the wrap point after the last tab - measured with
-                        // TalkBack on a phone. Merging absorbs that empty child, so the words do not
-                        // change and no action comes with it; the edit button is a clickable sibling and
-                        // stays its own stop.
-                        if (graphDescription != null) Modifier.semantics(mergeDescendants = true) { contentDescription = graphDescription }
-                        else Modifier
-                    )
-            )
-            if (!isSimpleMode) {
-                GraphEditButton(
-                    onClick = { editingBgOverlays = true },
-                    graphName = stringResource(CoreUiStrings.glucose),
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(end = 4.dp, top = 2.dp)
-                )
-            }
-            // Own composable, so a finger move does not recompose this section
-            GraphInspectOverlay(
-                inspect = inspect,
-                graphViewModel = graphViewModel,
-                bgReadings = bgReadings,
-                minTimestamp = derivedTimeRange?.first,
-                modifier = Modifier
-                    .align(Alignment.TopCenter)
-                    .offset(y = INSPECT_PILL_OFFSET)
-                    .padding(top = 2.dp, start = 36.dp, end = 36.dp)
-            )
-        }
-        // A node of its own rather than more text on the graph above, so a listener reaches the
-        // readings first and swipes once to decide whether she wants the forecast, instead of having
-        // to sit through it every time. It needs real bounds to be reachable at all, hence a 1 dp
-        // strip: invisible on screen, present in the accessibility tree.
-        predictionDescription?.let { description ->
-            Spacer(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(1.dp)
-                    .semantics { contentDescription = description }
-            )
-        }
-        if (editingBgOverlays) {
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.graph_bg),
-                selectedSeries = graphConfig.bgOverlays,
-                availableSeries = BG_OVERLAY_SERIES,
-                height = graphConfig.bgHeight,
-                onHeightChange = { h ->
-                    graphViewModel.updateGraphConfig(graphConfig.copy(bgHeight = h))
-                },
-                onToggle = { type ->
-                    val current = graphConfig.bgOverlays.toMutableList()
-                    if (type in current) current.remove(type) else current.add(type)
-                    graphViewModel.updateGraphConfig(graphConfig.copy(bgOverlays = current))
-                },
-                onDismiss = { editingBgOverlays = false }
-            )
-        }
-        // Fixed IOB graph (Graph 1) with optional Activity overlay
-        var editingIobOverlays by remember { mutableStateOf(false) }
-        Box(modifier = Modifier.pullUp(IOB_GRAPH_PULL_UP)) {
-            SecondaryGraphCompose(
-                viewModel = graphViewModel,
-                seriesTypes = listOf(SeriesType.IOB),
-                scrollState = iobScrollState,
-                zoomState = iobZoomState,
-                derivedTimeRange = derivedTimeRange,
-                nowTimestamp = nowTimestamp,
-                activityOverlay = SeriesType.ACTIVITY in graphConfig.iobOverlays,
-                onVisibleRangeChanged = { iobVisibleRange = it },
-                inspect = inspect,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(graphConfig.iobHeight.dp - REMOVED_TIME_LABELS_HEIGHT)
-            )
-            GraphNameRow(
-                name = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
-                editName = stringResource(CoreUiStrings.iob),
-                onEdit = if (isSimpleMode) null else ({ editingIobOverlays = true }),
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(end = 4.dp, bottom = GRAPH_NAME_BOTTOM_PADDING)
-            )
-        }
-        if (editingIobOverlays) {
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
-                selectedSeries = graphConfig.iobOverlays,
-                availableSeries = listOf(SeriesType.ACTIVITY),
-                height = graphConfig.iobHeight,
-                onHeightChange = { h ->
-                    graphViewModel.updateGraphConfig(graphConfig.copy(iobHeight = h))
-                },
-                onToggle = { type ->
-                    val current = graphConfig.iobOverlays.toMutableList()
-                    if (type in current) current.remove(type) else current.add(type)
-                    graphViewModel.updateGraphConfig(graphConfig.copy(iobOverlays = current))
-                },
-                onDismiss = { editingIobOverlays = false }
-            )
-        }
-
-        // Secondary graphs — config-driven (labels start at "Graph 2")
-        var editingGraphIndex by remember { mutableIntStateOf(-1) }
-        for (i in 0 until activeCount) {
-            val secondary = graphConfig.secondaryGraphs[i]
-            Box(modifier = Modifier.pullUp(GRAPH_OVERLAP)) {
-                SecondaryGraphCompose(
+            // Treatment Belt Graph - running mode background + therapy events
+            if (showTreatmentBelt) {
+                TreatmentBeltGraphCompose(
                     viewModel = graphViewModel,
                     inspect = inspect,
-                    seriesTypes = secondary.series,
-                    scrollState = secScrollStates[i],
-                    zoomState = secZoomStates[i],
+                    scrollState = beltScrollState,
+                    zoomState = beltZoomState,
                     derivedTimeRange = derivedTimeRange,
                     nowTimestamp = nowTimestamp,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+            // BG Graph - primary interactive graph
+            var editingBgOverlays by remember { mutableStateOf(false) }
+
+            // The graph is drawn, so a screen reader gets nothing from it at all - a chart contributes
+            // no semantics node of its own. Describe it instead: the recent readings newest first,
+            // because the current value is what matters most and a listener may stop there, plus what
+            // is on board. The description goes on the graph itself rather than the Box, so the edit
+            // button beside it stays a separate control.
+            val bgReadings by graphViewModel.bgReadingsFlow.collectAsStateWithLifecycle()
+            val profileUtil = LocalProfileUtil.current
+            val decimalFormatter = LocalDecimalFormatter.current
+            val recentValues = remember(bgReadings, profileUtil.units) {
+                // BgDataPoint.value is ALREADY in the user's units, so it must not be converted again -
+                // only formatted. The unit decides the decimals; the "detect" helpers guess that from
+                // the magnitude and would read a very high mmol/l reading as mg/dl.
+                newestReadings(bgReadings, RECENT_VALUES_SPOKEN)
+                    .joinToString(", ") {
+                        if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(it.value)
+                        else decimalFormatter.to1Decimal(it.value)
+                    }
+            }
+            val graphDescription = when {
+                recentValues.isEmpty()                 -> null
+                iobText != null && cobText != null     -> stringResource(
+                    UiStrings.a11y_bg_graph_summary,
+                    recentValues,
+                    stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.iob), iobText),
+                    stringResource(InterfacesStrings.confirmation_line, stringResource(CoreUiStrings.cob), cobText)
+                )
+
+                else                                   -> stringResource(UiStrings.a11y_bg_graph_summary_values_only, recentValues)
+            }
+
+            // The predicted curves are drawn and nothing else on the screen states them, so they were
+            // out of reach entirely. Each curve gets one sentence naming where it is heading, which is
+            // what a listener can actually hold in their head - reading a whole series of points back
+            // would be unusable. Reported as the biggest excursion from the current glucose rather than
+            // the final point, because a curve that dips to 3.2 before settling at 6.0 matters for the
+            // dip, and that is the reading of "heading up to" or "down to" a user means.
+            val currentValue = remember(bgReadings) { newestReadings(bgReadings, 1).firstOrNull()?.value }
+            val unitLabel = if (profileUtil.units == GlucoseUnit.MMOL) stringResource(CoreUiStrings.mmol) else stringResource(CoreUiStrings.mgdl)
+            // Nothing is said about curves the user has switched off the graph.
+            val predictionsVisible = SeriesType.PREDICTIONS in graphConfig.bgOverlays
+            val predictionExtremes = remember(predictions, currentValue, predictionsVisible) {
+                if (!predictionsVisible || currentValue == null) emptyList()
+                else PREDICTION_SPOKEN_ORDER.mapNotNull { (type, name) ->
+                    predictionExtreme(predictions.filter { it.type == type }.map { it.value }, currentValue)
+                        ?.let { (value, direction) -> Triple(name, value, direction) }
+                }
+            }
+            // map, not joinToString: the latter is not inline, so a @Composable call cannot sit in its
+            // lambda. The finished sentences are joined afterwards, as the graph summary joins its values.
+            val predictionSentences = predictionExtremes.map { (name, value, direction) ->
+                // BgDataPoint.value is ALREADY in the user's units, as above: format, never convert.
+                val shown = stringResource(
+                    CoreUiStrings.value_with_unit,
+                    if (profileUtil.units == GlucoseUnit.MGDL) decimalFormatter.to0Decimal(value) else decimalFormatter.to1Decimal(value),
+                    unitLabel
+                )
+                when (direction) {
+                    PredictionDirection.UP   -> stringResource(UiStrings.a11y_prediction_rises, stringResource(name), shown)
+                    PredictionDirection.DOWN -> stringResource(UiStrings.a11y_prediction_falls, stringResource(name), shown)
+                    PredictionDirection.FLAT -> stringResource(UiStrings.a11y_prediction_flat, stringResource(name), shown)
+                }
+            }
+            val predictionDescription =
+                if (predictionSentences.isEmpty()) null
+                else stringResource(UiStrings.a11y_predictions, predictionSentences.joinToString(" "))
+
+            Box(
+                modifier = Modifier
+                    .offset(y = if (showTreatmentBelt) (-16).dp else 0.dp)
+                    .graphInspectTouch(inspect)
+            ) {
+                BgGraphCompose(
+                    viewModel = graphViewModel,
+                    bgOverlays = graphConfig.bgOverlays,
+                    scrollState = bgScrollState,
+                    zoomState = bgZoomState,
+                    derivedTimeRange = derivedTimeRange,
+                    nowTimestamp = nowTimestamp,
+                    visibleTimeRange = bgVisibleTimeRange,
+                    inspect = inspect,
+                    showTimeLabels = !timeLabelsOnLastGraphOnly,
+                    softColors = circleStyle,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(secondary.height.dp - REMOVED_TIME_LABELS_HEIGHT)
+                        .height(graphConfig.bgHeight.dp)
+                        .onScrollOrZoomGesture(graphViewModel::onGraphInteraction)
+                        .then(
+                            // Merging, not a bare semantics block: a described node is reached by linear
+                            // screen-reader navigation only when it is a leaf or a merging parent. This one
+                            // has a child (the chart's own node, which carries no text), so unmerged it was
+                            // skipped in both directions and could be reached only as the first step from
+                            // the glucose circle or at the wrap point after the last tab - measured with
+                            // TalkBack on a phone. Merging absorbs that empty child, so the words do not
+                            // change and no action comes with it; the edit button is a clickable sibling and
+                            // stays its own stop.
+                            if (graphDescription != null) Modifier.semantics(mergeDescendants = true) { contentDescription = graphDescription }
+                            else Modifier
+                        )
+                )
+                if (!isSimpleMode) {
+                    GraphEditButton(
+                        onClick = { editingBgOverlays = true },
+                        graphName = stringResource(CoreUiStrings.glucose),
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(end = 4.dp, top = 2.dp)
+                    )
+                }
+                // Own composable, so a finger move does not recompose this section. No belt: no room to move up.
+                GraphInspectOverlay(
+                    inspect = inspect,
+                    graphViewModel = graphViewModel,
+                    bgReadings = bgReadings,
+                    minTimestamp = derivedTimeRange?.first,
+                    circleStyle = circleStyle,
+                    modifier = Modifier
+                        .align(Alignment.TopCenter)
+                        .offset(y = if (showTreatmentBelt) INSPECT_PILL_OFFSET else 0.dp)
+                        .padding(top = 2.dp, start = 36.dp, end = 36.dp)
+                )
+            }
+            // A node of its own rather than more text on the graph above, so a listener reaches the
+            // readings first and swipes once to decide whether she wants the forecast, instead of having
+            // to sit through it every time. It needs real bounds to be reachable at all, hence a 1 dp
+            // strip: invisible on screen, present in the accessibility tree.
+            predictionDescription?.let { description ->
+                Spacer(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(1.dp)
+                        .semantics { contentDescription = description }
+                )
+            }
+            if (editingBgOverlays) {
+                GraphSeriesBottomSheet(
+                    title = stringResource(CoreUiStrings.graph_bg),
+                    selectedSeries = graphConfig.bgOverlays,
+                    availableSeries = BG_OVERLAY_SERIES,
+                    height = graphConfig.bgHeight,
+                    onHeightChange = { h ->
+                        graphViewModel.updateGraphConfig(graphConfig.copy(bgHeight = h))
+                    },
+                    onToggle = { type ->
+                        val current = graphConfig.bgOverlays.toMutableList()
+                        if (type in current) current.remove(type) else current.add(type)
+                        graphViewModel.updateGraphConfig(graphConfig.copy(bgOverlays = current))
+                    },
+                    onDismiss = { editingBgOverlays = false }
+                )
+            }
+            // Fixed IOB graph (Graph 1) with optional Activity overlay
+            var editingIobOverlays by remember { mutableStateOf(false) }
+            // Circle style: a small gap between the graphs instead of pulling them together. Without the belt
+            // the BG graph is not drawn higher, so there is nothing to pull up into.
+            val iobShowsTimeLabels = timeLabelsOnLastGraphOnly && activeCount == 0
+            if (circleStyle) Spacer(Modifier.height(AapsSpacing.medium))
+            Box(modifier = if (circleStyle || !showTreatmentBelt) Modifier else Modifier.pullUp(IOB_GRAPH_PULL_UP)) {
+                SecondaryGraphCompose(
+                    viewModel = graphViewModel,
+                    seriesTypes = listOf(SeriesType.IOB),
+                    scrollState = iobScrollState,
+                    zoomState = iobZoomState,
+                    derivedTimeRange = derivedTimeRange,
+                    nowTimestamp = nowTimestamp,
+                    activityOverlay = SeriesType.ACTIVITY in graphConfig.iobOverlays,
+                    onVisibleRangeChanged = { iobVisibleRange = it },
+                    inspect = inspect,
+                    showTimeLabels = iobShowsTimeLabels,
+                    basalHeightFraction = iobGraphBasalFraction,
+                    softStyle = circleStyle,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(graphConfig.iobHeight.dp - if (iobShowsTimeLabels) 0.dp else REMOVED_TIME_LABELS_HEIGHT)
                 )
                 GraphNameRow(
-                    name = seriesListLabel(secondary.series),
-                    editName = seriesListLabel(secondary.series),
-                    onEdit = if (isSimpleMode) null else ({ editingGraphIndex = i }),
+                    name = if (showIobGraphLabel) stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname) else "",
+                    editName = stringResource(CoreUiStrings.iob),
+                    onEdit = if (isSimpleMode) null else ({ editingIobOverlays = true }),
                     modifier = Modifier
                         .align(Alignment.BottomEnd)
                         .padding(end = 4.dp, bottom = GRAPH_NAME_BOTTOM_PADDING)
                 )
             }
-        }
-        if (editingGraphIndex >= 0 && editingGraphIndex < activeCount) {
-            // Read once. The lambdas below can run after the sheet has closed and the index is
-            // already -1: NumberInputRow saves a focused field when it leaves the screen.
-            val index = editingGraphIndex
-            val editing = graphConfig.secondaryGraphs[index]
-            GraphSeriesBottomSheet(
-                title = stringResource(CoreUiStrings.graph_number, index + 2),
-                selectedSeries = editing.series,
-                availableSeries = CONFIGURABLE_SERIES,
-                height = editing.height,
-                onHeightChange = { h ->
-                    // The current config, not the captured one: after "Remove graph" the captured
-                    // config still holds the removed graph, and writing it back would restore it.
-                    withSecondaryGraphHeight(graphViewModel.graphConfigFlow.value, index, editing.series, h)
-                        ?.let { graphViewModel.updateGraphConfig(it) }
-                },
-                onToggle = { type ->
-                    val graphs = graphConfig.secondaryGraphs.toMutableList()
-                    val current = graphs[index].series.toMutableList()
-                    if (type in current) {
-                        current.remove(type)
-                    } else {
-                        current.add(type)
-                        if (current.size > 2) current.removeAt(0) // FIFO: drop oldest
-                    }
-                    if (current.isEmpty()) {
-                        // Auto-remove graph when all series deselected
-                        graphs.removeAt(index)
-                        editingGraphIndex = -1
-                    } else {
-                        graphs[index] = graphs[index].copy(series = current)
-                    }
-                    graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                },
-                onRemoveGraph = {
-                    val graphs = graphConfig.secondaryGraphs.toMutableList()
-                    graphs.removeAt(index)
-                    editingGraphIndex = -1
-                    graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                },
-                onDismiss = { editingGraphIndex = -1 }
-            )
-        }
-        // Add graph button (hidden in simple mode)
-        if (!isSimpleMode && activeCount < GraphConfig.MAX_SECONDARY_GRAPHS) {
-            var showAddSheet by remember { mutableStateOf(false) }
-            TextButton(
-                onClick = { showAddSheet = true },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
-                Spacer(Modifier.width(4.dp))
-                Text(stringResource(CoreUiStrings.graph_add), style = MaterialTheme.typography.labelMedium)
-            }
-            if (showAddSheet) {
-                var newGraphSeries by remember { mutableStateOf(emptyList<SeriesType>()) }
-                var newGraphHeight by remember { mutableIntStateOf(GraphConfig.DEFAULT_GRAPH_HEIGHT_DP) }
+            if (editingIobOverlays) {
                 GraphSeriesBottomSheet(
-                    title = stringResource(CoreUiStrings.graph_new),
-                    selectedSeries = newGraphSeries,
-                    availableSeries = CONFIGURABLE_SERIES,
-                    height = newGraphHeight,
-                    onHeightChange = { newGraphHeight = it },
+                    title = stringResource(CoreUiStrings.iob) + " / " + stringResource(CoreUiStrings.basal_shortname),
+                    selectedSeries = graphConfig.iobOverlays,
+                    availableSeries = listOf(SeriesType.ACTIVITY),
+                    height = graphConfig.iobHeight,
+                    onHeightChange = { h ->
+                        graphViewModel.updateGraphConfig(graphConfig.copy(iobHeight = h))
+                    },
                     onToggle = { type ->
-                        val current = newGraphSeries.toMutableList()
+                        val current = graphConfig.iobOverlays.toMutableList()
+                        if (type in current) current.remove(type) else current.add(type)
+                        graphViewModel.updateGraphConfig(graphConfig.copy(iobOverlays = current))
+                    },
+                    onDismiss = { editingIobOverlays = false }
+                )
+            }
+
+            // Secondary graphs — config-driven (labels start at "Graph 2")
+            var editingGraphIndex by remember { mutableIntStateOf(-1) }
+            for (i in 0 until activeCount) {
+                val secondary = graphConfig.secondaryGraphs[i]
+                val showsTimeLabels = timeLabelsOnLastGraphOnly && i == activeCount - 1
+                if (circleStyle) Spacer(Modifier.height(AapsSpacing.medium))
+                Box(modifier = if (circleStyle) Modifier else Modifier.pullUp(GRAPH_OVERLAP)) {
+                    SecondaryGraphCompose(
+                        viewModel = graphViewModel,
+                        inspect = inspect,
+                        seriesTypes = secondary.series,
+                        scrollState = secScrollStates[i],
+                        zoomState = secZoomStates[i],
+                        derivedTimeRange = derivedTimeRange,
+                        nowTimestamp = nowTimestamp,
+                        showTimeLabels = showsTimeLabels,
+                        softStyle = circleStyle,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(secondary.height.dp - if (showsTimeLabels) 0.dp else REMOVED_TIME_LABELS_HEIGHT)
+                    )
+                    GraphNameRow(
+                        name = seriesListLabel(secondary.series),
+                        editName = seriesListLabel(secondary.series),
+                        onEdit = if (isSimpleMode) null else ({ editingGraphIndex = i }),
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(end = 4.dp, bottom = GRAPH_NAME_BOTTOM_PADDING)
+                    )
+                }
+            }
+            if (editingGraphIndex >= 0 && editingGraphIndex < activeCount) {
+                // Read once. The lambdas below can run after the sheet has closed and the index is
+                // already -1: NumberInputRow saves a focused field when it leaves the screen.
+                val index = editingGraphIndex
+                val editing = graphConfig.secondaryGraphs[index]
+                GraphSeriesBottomSheet(
+                    title = stringResource(CoreUiStrings.graph_number, index + 2),
+                    selectedSeries = editing.series,
+                    availableSeries = CONFIGURABLE_SERIES,
+                    height = editing.height,
+                    onHeightChange = { h ->
+                        // The current config, not the captured one: after "Remove graph" the captured
+                        // config still holds the removed graph, and writing it back would restore it.
+                        withSecondaryGraphHeight(graphViewModel.graphConfigFlow.value, index, editing.series, h)
+                            ?.let { graphViewModel.updateGraphConfig(it) }
+                    },
+                    onToggle = { type ->
+                        val graphs = graphConfig.secondaryGraphs.toMutableList()
+                        val current = graphs[index].series.toMutableList()
                         if (type in current) {
                             current.remove(type)
                         } else {
                             current.add(type)
-                            if (current.size > 2) current.removeAt(0)
+                            if (current.size > 2) current.removeAt(0) // FIFO: drop oldest
                         }
-                        newGraphSeries = current
+                        if (current.isEmpty()) {
+                            // Auto-remove graph when all series deselected
+                            graphs.removeAt(index)
+                            editingGraphIndex = -1
+                        } else {
+                            graphs[index] = graphs[index].copy(series = current)
+                        }
+                        graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
                     },
-                    onDismiss = {
-                        if (newGraphSeries.isNotEmpty()) {
-                            val graphs = graphConfig.secondaryGraphs.toMutableList()
-                            graphs.add(SecondaryGraph(newGraphSeries, newGraphHeight))
-                            graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
-                        }
-                        newGraphSeries = emptyList()
-                        newGraphHeight = GraphConfig.DEFAULT_GRAPH_HEIGHT_DP
-                        showAddSheet = false
-                    }
+                    onRemoveGraph = {
+                        val graphs = graphConfig.secondaryGraphs.toMutableList()
+                        graphs.removeAt(index)
+                        editingGraphIndex = -1
+                        graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
+                    },
+                    onDismiss = { editingGraphIndex = -1 }
                 )
             }
         }
-        // Spacer so the last graph / Add button isn't covered by QuickLaunch toolbar
-        Spacer(Modifier.height(48.dp))
+        Column(modifier = Modifier.padding(horizontal = horizontalPadding)) {
+            // Add graph button (hidden in simple mode)
+            if (!isSimpleMode && activeCount < GraphConfig.MAX_SECONDARY_GRAPHS) {
+                var showAddSheet by remember { mutableStateOf(false) }
+                TextButton(
+                    onClick = { showAddSheet = true },
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(4.dp))
+                    Text(stringResource(CoreUiStrings.graph_add), style = MaterialTheme.typography.labelMedium)
+                }
+                if (showAddSheet) {
+                    var newGraphSeries by remember { mutableStateOf(emptyList<SeriesType>()) }
+                    var newGraphHeight by remember { mutableIntStateOf(GraphConfig.DEFAULT_GRAPH_HEIGHT_DP) }
+                    GraphSeriesBottomSheet(
+                        title = stringResource(CoreUiStrings.graph_new),
+                        selectedSeries = newGraphSeries,
+                        availableSeries = CONFIGURABLE_SERIES,
+                        height = newGraphHeight,
+                        onHeightChange = { newGraphHeight = it },
+                        onToggle = { type ->
+                            val current = newGraphSeries.toMutableList()
+                            if (type in current) {
+                                current.remove(type)
+                            } else {
+                                current.add(type)
+                                if (current.size > 2) current.removeAt(0)
+                            }
+                            newGraphSeries = current
+                        },
+                        onDismiss = {
+                            if (newGraphSeries.isNotEmpty()) {
+                                val graphs = graphConfig.secondaryGraphs.toMutableList()
+                                graphs.add(SecondaryGraph(newGraphSeries, newGraphHeight))
+                                graphViewModel.updateGraphConfig(graphConfig.copy(secondaryGraphs = graphs))
+                            }
+                            newGraphSeries = emptyList()
+                            newGraphHeight = GraphConfig.DEFAULT_GRAPH_HEIGHT_DP
+                            showAddSheet = false
+                        }
+                    )
+                }
+            }
+            // Spacer so the last graph / Add button isn't covered by QuickLaunch toolbar
+            Spacer(Modifier.height(48.dp))
+        }
     }
 }
 
@@ -871,7 +913,7 @@ private fun GraphNameRow(
 
 /** Small pencil icon button overlaid on a graph */
 @Composable
-private fun GraphEditButton(
+internal fun GraphEditButton(
     onClick: () -> Unit,
     graphName: String,
     modifier: Modifier = Modifier

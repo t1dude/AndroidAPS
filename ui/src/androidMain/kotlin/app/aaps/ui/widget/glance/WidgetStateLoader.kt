@@ -23,6 +23,7 @@ import app.aaps.core.interfaces.utils.DecimalFormatter
 import app.aaps.core.interfaces.utils.TrendCalculator
 import app.aaps.core.keys.BooleanComposedKey
 import app.aaps.core.keys.IntComposedKey
+import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.extensions.apsAdjustedTargetMgdl
 import app.aaps.core.objects.extensions.round
@@ -72,6 +73,13 @@ class WidgetStateLoader(
             lastBgData.isHigh() -> BgGraphColors.WIDGET.high
             else                -> BgGraphColors.WIDGET.inRange
         }
+        // The glucose circle widget follows Settings > Appearance > Home Screen Design. Widgets sit on a
+        // dark background, so the dark variant of the palette is used.
+        val circleBgColor = if (preferences.get(StringKey.OverviewHomeScreenDesign) == "circle") when {
+            lastBgData.isLow()  -> DarkGeneralColors.circleCritical.toArgb()
+            lastBgData.isHigh() -> DarkGeneralColors.circleWarning.toArgb()
+            else                -> DarkGeneralColors.circleNormal.toArgb()
+        } else bgColor
         val strikeThrough = !lastBgData.isActualBg()
 
         val trendArrow = trendCalculator.getTrendArrow(iobCobCalculator.ads)
@@ -211,6 +219,7 @@ class WidgetStateLoader(
         return WidgetRenderState(
             bgText = bgText,
             bgColor = bgColor,
+            circleBgColor = circleBgColor,
             strikeThrough = strikeThrough,
             arrowResId = arrowResId,
             trendArrow = lastBg?.let { trendArrow },

@@ -48,8 +48,10 @@ import app.aaps.core.interfaces.notifications.AapsNotification
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.pump.BolusProgressState
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.core.ui.compose.LocalDateUtil
 import app.aaps.core.ui.compose.LocalSnackbarHostState
+import app.aaps.core.ui.compose.PhoneScale
 import app.aaps.core.ui.compose.dialogs.OkCancelDialog
 import app.aaps.core.ui.compose.dialogs.ThreeButtonDialog
 import app.aaps.core.ui.compose.navigation.NavigationRequest
@@ -67,11 +69,13 @@ import app.aaps.ui.compose.overview.OverviewScreen
 import app.aaps.ui.compose.overview.chips.ChipsViewModel
 import app.aaps.ui.compose.overview.graphs.GraphViewModel
 import app.aaps.ui.compose.overview.statusLights.StatusViewModel
+import app.aaps.ui.compose.quickLaunch.HomeSheet
 import app.aaps.ui.compose.quickLaunch.QuickLaunchAction
 import app.aaps.ui.compose.quickLaunch.QuickLaunchToolbar
 import app.aaps.ui.compose.quickLaunch.ResolvedQuickLaunchItem
 import app.aaps.ui.compose.scenesSheet.ScenesBottomSheet
 import app.aaps.ui.compose.scenesSheet.ScenesViewModel
+import app.aaps.ui.compose.tempTargetSheet.TempTargetsBottomSheet
 import app.aaps.ui.compose.treatmentsSheet.TreatmentBottomSheet
 import app.aaps.ui.compose.treatmentsSheet.TreatmentViewModel
 import app.aaps.ui.search.SearchIndexEntry
@@ -158,6 +162,7 @@ fun MainScreen(
     var showTreatmentSheet by remember { mutableStateOf(false) }
     var showAutomationSheet by remember { mutableStateOf(false) }
     var showLoopActionSheet by remember { mutableStateOf(false) }
+    var showTempTargetSheet by remember { mutableStateOf(false) }
     val automationState by scenesViewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = LocalSnackbarHostState.current
 
@@ -210,6 +215,18 @@ fun MainScreen(
             // Measure actual bar heights for content padding in non-preview mode
             var topBarHeightPx by remember { mutableIntStateOf(0) }
             var bottomBarHeightPx by remember { mutableIntStateOf(0) }
+            var toolbarHeightPx by remember { mutableIntStateOf(0) }
+
+            // Circle home screen (on every screen shape, the same rule as OverviewScreen): Treatments,
+            // Scenes and Manage move from the bottom bar to the quick launch toolbar. The bottom bar
+            // then only shows up for its alert buttons (setup, BG quality, objectives, open loop, permissions).
+            val circleLayout = uiState.isCircleHomeScreen
+            val loopActionAvailable = loopActionViewModel.uiState.collectAsStateWithLifecycle().value.actionAvailable
+            val hasBottomBarAlerts = pumpSetupPlugin != null ||
+                bgSetupPlugin?.pluginDescription?.icon != null ||
+                objectivesSetupPlugin?.pluginDescription?.icon != null ||
+                loopActionAvailable || permissionsMissing
+            val showBottomBar = !circleLayout || hasBottomBarAlerts
 
             // Auto-hide chrome after timeout, reset when leaving preview mode
             LaunchedEffect(chromeVisible, previewMode) {
@@ -232,17 +249,25 @@ fun MainScreen(
             // WindowInsets.statusBars / navigationBars, which would be consumed
             // (returning zero height) if those Scaffold slots were populated.
             Scaffold { scaffoldPadding ->
-                val hasToolbar = quickLaunchItems.isNotEmpty()
+                val masterOrPairedClientForToolbar by mainViewModel.masterOrPairedClient.collectAsStateWithLifecycle()
+                // Treatments, Scenes and temp targets send commands, so an unpaired client does not get them (as in the bottom bar)
+                val toolbarItems = quickLaunchItems.filter { item ->
+                    val sheet = (item.action as? QuickLaunchAction.SheetAction)?.sheet
+                    masterOrPairedClientForToolbar || (sheet != HomeSheet.TREATMENTS && sheet != HomeSheet.SCENES && sheet != HomeSheet.TEMP_TARGETS)
+                }
+                val hasToolbar = toolbarItems.isNotEmpty()
+                val bottomBarHeight = if (showBottomBar) with(density) { bottomBarHeightPx.toDp() } else 0.dp
 
                 // Content padding: in preview mode use only system bars;
                 // in normal mode add measured bar heights
                 val contentPadding = if (previewMode) scaffoldPadding
                 else {
                     val topBarHeight = with(density) { topBarHeightPx.toDp() }
-                    val bottomBarHeight = with(density) { bottomBarHeightPx.toDp() }
+                    // The Circle screen keeps its last graph (with the hour labels) clear of the floating toolbar
+                    val toolbarSpace = if (circleLayout && hasToolbar) with(density) { toolbarHeightPx.toDp() } + 8.dp else 0.dp
                     PaddingValues(
                         top = scaffoldPadding.calculateTopPadding() + topBarHeight,
-                        bottom = scaffoldPadding.calculateBottomPadding() + bottomBarHeight
+                        bottom = scaffoldPadding.calculateBottomPadding() + bottomBarHeight + toolbarSpace
                     )
                 }
 
@@ -254,232 +279,263 @@ fun MainScreen(
                 val masterOrPairedClient by mainViewModel.masterOrPairedClient.collectAsStateWithLifecycle()
                 // (Probe-while-offline is now global — see ComposeMainActivity. This screen still reads
                 // masterReachable for its own gating.)
-                Box(modifier = Modifier.fillMaxSize()) {
-                    // Main content
-                    OverviewScreen(
-                        profileName = uiState.profileName,
-                        profilePsId = uiState.profilePsId,
-                        isProfileModified = uiState.isProfileModified,
-                        profileProgress = uiState.profileProgress,
-                        tempTargetText = uiState.tempTargetText,
-                        tempTargetState = uiState.tempTargetState,
-                        tempTargetProgress = uiState.tempTargetProgress,
-                        tempTargetReason = uiState.tempTargetReason,
-                        tempTargetRecordId = uiState.tempTargetRecordId,
-                        runningMode = uiState.runningMode,
-                        runningModeText = uiState.runningModeText,
-                        runningModeRemaining = uiState.runningModeRemaining,
-                        runningModeProgress = uiState.runningModeProgress,
-                        runningModeRecordId = uiState.runningModeRecordId,
-                        tbrState = uiState.tbrState,
-                        smbEnabled = uiState.smbEnabled,
-                        isSimpleMode = uiState.isSimpleMode,
-                        calcProgress = calcProgress,
-                        graphViewModel = graphViewModel,
-                        chipsViewModel = chipsViewModel,
-                        manageViewModel = manageViewModel,
-                        statusViewModel = statusViewModel,
-                        statusLightsDef = statusLightsDef,
-                        onNavigate = onNavigate,
-                        onTbrChipClick = mainViewModel::showTbrInfo,
-                        onIobChipClick = chipsViewModel::showIobInfo,
-                        notifications = notifications,
-                        onDismissNotification = onDismissNotification,
-                        onNotificationActionClick = onNotificationActionClick,
-                        autoShowNotificationSheet = autoShowNotificationSheet,
-                        onAutoShowConsumed = onAutoShowConsumed,
-                        activeSceneState = activeSceneState,
-                        sceneExpired = sceneExpired,
-                        activeSceneChainTargetName = activeSceneChainTargetName,
-                        onEndScene = { mainViewModel.requestSceneDeactivation() },
-                        onDismissScene = { mainViewModel.dismissExpiredScene() },
-                        endSceneEnabled = masterReachable,
-                        commandsAllowed = masterOrPairedClient,
-                        formatDuration = mainViewModel::formatDuration,
-                        paddingValues = contentPadding,
-                        fabBottomOffset = if (hasToolbar && showChrome) 56.dp else 0.dp,
-                        bolusState = bolusState,
-                        pumpStatusText = pumpStatusText,
-                        queueStatusText = queueStatusText,
-                        isPumpCommunicating = isPumpCommunicating,
-                        onStopBolus = onStopBolus
-                    )
+                // Circle home screen: phone sizes on a tablet or an unfolded foldable, so the extra room
+                // shows more instead of the same things bigger
+                PhoneScale(enabled = circleLayout) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        // Main content
+                        OverviewScreen(
+                            profileName = uiState.profileName,
+                            profilePsId = uiState.profilePsId,
+                            isProfileModified = uiState.isProfileModified,
+                            profileProgress = uiState.profileProgress,
+                            tempTargetText = uiState.tempTargetText,
+                            tempTargetState = uiState.tempTargetState,
+                            tempTargetProgress = uiState.tempTargetProgress,
+                            tempTargetReason = uiState.tempTargetReason,
+                            tempTargetRecordId = uiState.tempTargetRecordId,
+                            runningMode = uiState.runningMode,
+                            runningModeText = uiState.runningModeText,
+                            runningModeRemaining = uiState.runningModeRemaining,
+                            runningModeProgress = uiState.runningModeProgress,
+                            runningModeRecordId = uiState.runningModeRecordId,
+                            tbrState = uiState.tbrState,
+                            smbEnabled = uiState.smbEnabled,
+                            isSimpleMode = uiState.isSimpleMode,
+                            isCircleHomeScreen = uiState.isCircleHomeScreen,
+                            calcProgress = calcProgress,
+                            graphViewModel = graphViewModel,
+                            chipsViewModel = chipsViewModel,
+                            manageViewModel = manageViewModel,
+                            statusViewModel = statusViewModel,
+                            statusLightsDef = statusLightsDef,
+                            onNavigate = onNavigate,
+                            onTbrChipClick = mainViewModel::showTbrInfo,
+                            onIobChipClick = chipsViewModel::showIobInfo,
+                            notifications = notifications,
+                            onDismissNotification = onDismissNotification,
+                            onNotificationActionClick = onNotificationActionClick,
+                            autoShowNotificationSheet = autoShowNotificationSheet,
+                            onAutoShowConsumed = onAutoShowConsumed,
+                            activeSceneState = activeSceneState,
+                            sceneExpired = sceneExpired,
+                            activeSceneChainTargetName = activeSceneChainTargetName,
+                            onEndScene = { mainViewModel.requestSceneDeactivation() },
+                            onDismissScene = { mainViewModel.dismissExpiredScene() },
+                            endSceneEnabled = masterReachable,
+                            commandsAllowed = masterOrPairedClient,
+                            formatDuration = mainViewModel::formatDuration,
+                            paddingValues = contentPadding,
+                            fabBottomOffset = when {
+                                !hasToolbar || !showChrome -> 0.dp
+                                circleLayout               -> 0.dp // contentPadding already holds the toolbar
+                                else                       -> 56.dp
+                            },
+                            bolusState = bolusState,
+                            pumpStatusText = pumpStatusText,
+                            queueStatusText = queueStatusText,
+                            isPumpCommunicating = isPumpCommunicating,
+                            onStopBolus = onStopBolus
+                        )
 
-                    // Search results overlay
-                    if (searchUiState.isSearchActive) {
-                        SearchResults(
-                            results = searchUiState.results,
-                            wikiResults = searchUiState.wikiResults,
-                            isSearching = searchUiState.isSearching,
-                            isSearchingWiki = searchUiState.isSearchingWiki,
-                            wikiOffline = searchUiState.wikiOffline,
-                            revision = searchUiState.revision,
-                            onResultClick = onSearchResultClick,
-                            onPluginToggle = onSearchPluginToggle,
+                        // Search results overlay
+                        if (searchUiState.isSearchActive) {
+                            SearchResults(
+                                results = searchUiState.results,
+                                wikiResults = searchUiState.wikiResults,
+                                isSearching = searchUiState.isSearching,
+                                isSearchingWiki = searchUiState.isSearchingWiki,
+                                wikiOffline = searchUiState.wikiOffline,
+                                revision = searchUiState.revision,
+                                onResultClick = onSearchResultClick,
+                                onPluginToggle = onSearchPluginToggle,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .padding(contentPadding)
+                            )
+                        }
+
+                        // Plugin enable/disable confirmations raised from search results (same dialogs as Config Builder)
+                        searchUiState.pluginSwitchConfirmation?.let { confirmation ->
+                            OkCancelDialog(
+                                title = stringResource(CoreUiStrings.configbuilder_switch_confirmation_title),
+                                message = stringResource(
+                                    CoreUiStrings.configbuilder_switch_confirmation,
+                                    confirmation.fromName,
+                                    confirmation.toName
+                                ),
+                                onConfirm = onConfirmSearchPluginSwitch,
+                                onDismiss = onDismissSearchPluginSwitch
+                            )
+                        }
+                        searchUiState.hardwarePumpConfirmation?.let { confirmation ->
+                            OkCancelDialog(
+                                title = stringResource(CoreUiStrings.confirmation),
+                                message = confirmation.message,
+                                onConfirm = onConfirmSearchHardwarePump,
+                                onDismiss = onDismissSearchHardwarePump
+                            )
+                        }
+
+                        // Version overlay
+                        VersionOverlay(
                             modifier = Modifier
-                                .fillMaxSize()
+                                .align(Alignment.TopEnd)
                                 .padding(contentPadding)
                         )
-                    }
 
-                    // Plugin enable/disable confirmations raised from search results (same dialogs as Config Builder)
-                    searchUiState.pluginSwitchConfirmation?.let { confirmation ->
-                        OkCancelDialog(
-                            title = stringResource(CoreUiStrings.configbuilder_switch_confirmation_title),
-                            message = stringResource(
-                                CoreUiStrings.configbuilder_switch_confirmation,
-                                confirmation.fromName,
-                                confirmation.toName
-                            ),
-                            onConfirm = onConfirmSearchPluginSwitch,
-                            onDismiss = onDismissSearchPluginSwitch
-                        )
-                    }
-                    searchUiState.hardwarePumpConfirmation?.let { confirmation ->
-                        OkCancelDialog(
-                            title = stringResource(CoreUiStrings.confirmation),
-                            message = confirmation.message,
-                            onConfirm = onConfirmSearchHardwarePump,
-                            onDismiss = onDismissSearchHardwarePump
-                        )
-                    }
-
-                    // Version overlay
-                    VersionOverlay(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(contentPadding)
-                    )
-
-                    // Status bar protection scrim — keeps system icons legible
-                    // against the floating search bar / graph content
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .fillMaxWidth()
-                            .windowInsetsTopHeight(WindowInsets.statusBars)
-                            .background(MaterialTheme.colorScheme.surface)
-                    )
-
-                    // Navigation bar protection scrim
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .fillMaxWidth()
-                            .windowInsetsBottomHeight(WindowInsets.navigationBars)
-                            .background(MaterialTheme.colorScheme.surface)
-                    )
-
-                    // Top bar overlay
-                    AnimatedVisibility(
-                        visible = showChrome,
-                        enter = slideInVertically { -it },
-                        exit = slideOutVertically { -it },
-                        modifier = Modifier
-                            .align(Alignment.TopCenter)
-                            .padding(top = scaffoldPadding.calculateTopPadding())
-                    ) {
-                        MainTopBar(
-                            searchUiState = searchUiState,
-                            onMenuClick = {
-                                scope.launch {
-                                    drawerState.open()
-                                    onMenuClick()
-                                }
-                            },
-                            onPreferencesClick = { onNavigate(NavigationRequest.Element(ElementType.SETTINGS)) },
-                            onSearchQueryChange = onSearchQueryChange,
-                            onSearchClear = onSearchClear,
-                            onSearchActiveChange = onSearchActiveChange,
-                            isSimpleMode = uiState.isSimpleMode,
-                            // Guard against transient 0 heights during AnimatedVisibility exit:
-                            // the resulting contentPadding invalidation can schedule a remeasure
-                            // on a node that's losing its owner — crashes in dispatchDraw.
-                            modifier = Modifier.onSizeChanged {
-                                if (it.height > 0 && it.height != topBarHeightPx) topBarHeightPx = it.height
-                            }
-                        )
-                    }
-
-                    // Bottom bar overlay
-                    AnimatedVisibility(
-                        visible = showChrome,
-                        enter = slideInVertically { it },
-                        exit = slideOutVertically { it },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = scaffoldPadding.calculateBottomPadding())
-                    ) {
-                        val loopActionState = loopActionViewModel.uiState.collectAsStateWithLifecycle().value
-                        MainNavigationBar(
-                            onManageClick = { manageSheetState.show() },
-                            onTreatmentClick = {
-                                treatmentViewModel.refreshState()
-                                showTreatmentSheet = true
-                            },
-                            masterOrPairedClient = masterOrPairedClient,
-                            quickWizardCount = uiState.quickWizardItems.size,
-                            onAutomationClick = {
-                                scenesViewModel.refreshState()
-                                showAutomationSheet = true
-                            },
-                            // Total drives nav-button visibility (button stays visible whenever
-                            // scenes/automation exist, even if currently un-activatable).
-                            // Count drives the badge — only items the user can act on right now.
-                            automationTotal = automationState.items.size + automationState.sceneItems.size,
-                            automationCount = automationState.items.count { it.activationReason == null } +
-                                automationState.sceneItems.count { it.activationReason == null },
-                            pumpSetupPlugin = pumpSetupPlugin,
-                            bgSetupPlugin = bgSetupPlugin,
-                            bgQualityBadgeIcon = bgQualityBadgeIcon,
-                            bgQualityBadgeTint = bgQualityBadgeTint,
-                            bgQualityBadgeDescription = bgQualityBadgeDescription,
-                            objectivesSetupPlugin = objectivesSetupPlugin,
-                            objectivesProgressText = objectivesProgressText,
-                            objectivesProgressDescription = objectivesProgressDescription,
-                            onNavigate = onNavigate,
-                            permissionsMissing = permissionsMissing,
-                            onPermissionsClick = onPermissionsClick,
-                            loopActionAvailable = loopActionState.actionAvailable,
-                            onLoopActionClick = { showLoopActionSheet = true },
-                            modifier = Modifier.onSizeChanged {
-                                if (it.height > 0 && it.height != bottomBarHeightPx) bottomBarHeightPx = it.height
-                            }
-                        )
-                    }
-
-                    // Quick launch toolbar overlay
-                    AnimatedVisibility(
-                        visible = hasToolbar && showChrome,
-                        enter = slideInVertically { it },
-                        exit = slideOutVertically { it },
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(
-                                bottom = scaffoldPadding.calculateBottomPadding() +
-                                    with(density) { bottomBarHeightPx.toDp() } + 8.dp
-                            )
-                    ) {
-                        QuickLaunchToolbar(
-                            items = quickLaunchItems,
-                            onActionClick = onQuickLaunchActionClick,
-                        )
-                    }
-
-                    // Tap overlay to restore chrome in preview mode (only when hidden)
-                    if (previewMode && !chromeVisible) {
-                        // Named: the top bar, menu and toolbar come back only through this, and a
-                        // screen reader announced it as a nameless control.
-                        val showControls = stringResource(UiStrings.a11y_show_controls)
+                        // Status bar protection scrim — keeps system icons legible
+                        // against the floating search bar / graph content
                         Box(
                             modifier = Modifier
-                                .fillMaxSize()
-                                .clickable(
-                                    interactionSource = interactionSource,
-                                    indication = null
-                                ) { chromeVisible = true }
-                                .semantics { contentDescription = showControls }
+                                .align(Alignment.TopCenter)
+                                .fillMaxWidth()
+                                .windowInsetsTopHeight(WindowInsets.statusBars)
+                                .background(MaterialTheme.colorScheme.surface)
                         )
+
+                        // Navigation bar protection scrim
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .fillMaxWidth()
+                                .windowInsetsBottomHeight(WindowInsets.navigationBars)
+                                .background(MaterialTheme.colorScheme.surface)
+                        )
+
+                        // Top bar overlay
+                        AnimatedVisibility(
+                            visible = showChrome,
+                            enter = slideInVertically { -it },
+                            exit = slideOutVertically { -it },
+                            modifier = Modifier
+                                .align(Alignment.TopCenter)
+                                .padding(top = scaffoldPadding.calculateTopPadding())
+                        ) {
+                            MainTopBar(
+                                searchUiState = searchUiState,
+                                onMenuClick = {
+                                    scope.launch {
+                                        drawerState.open()
+                                        onMenuClick()
+                                    }
+                                },
+                                onPreferencesClick = { onNavigate(NavigationRequest.Element(ElementType.SETTINGS)) },
+                                onSearchQueryChange = onSearchQueryChange,
+                                onSearchClear = onSearchClear,
+                                onSearchActiveChange = onSearchActiveChange,
+                                isSimpleMode = uiState.isSimpleMode,
+                                compactSearch = circleLayout,
+                                // Guard against transient 0 heights during AnimatedVisibility exit:
+                                // the resulting contentPadding invalidation can schedule a remeasure
+                                // on a node that's losing its owner — crashes in dispatchDraw.
+                                modifier = Modifier.onSizeChanged {
+                                    if (it.height > 0 && it.height != topBarHeightPx) topBarHeightPx = it.height
+                                }
+                            )
+                        }
+
+                        // Bottom bar overlay
+                        AnimatedVisibility(
+                            visible = showChrome && showBottomBar,
+                            enter = slideInVertically { it },
+                            exit = slideOutVertically { it },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(bottom = scaffoldPadding.calculateBottomPadding())
+                        ) {
+                            MainNavigationBar(
+                                onManageClick = { manageSheetState.show() },
+                                onTreatmentClick = {
+                                    treatmentViewModel.refreshState()
+                                    showTreatmentSheet = true
+                                },
+                                masterOrPairedClient = masterOrPairedClient,
+                                quickWizardCount = uiState.quickWizardItems.size,
+                                onAutomationClick = {
+                                    scenesViewModel.refreshState()
+                                    showAutomationSheet = true
+                                },
+                                // Total drives nav-button visibility (button stays visible whenever
+                                // scenes/automation exist, even if currently un-activatable).
+                                // Count drives the badge — only items the user can act on right now.
+                                automationTotal = automationState.items.size + automationState.sceneItems.size,
+                                automationCount = automationState.items.count { it.activationReason == null } +
+                                    automationState.sceneItems.count { it.activationReason == null },
+                                pumpSetupPlugin = pumpSetupPlugin,
+                                bgSetupPlugin = bgSetupPlugin,
+                                bgQualityBadgeIcon = bgQualityBadgeIcon,
+                                bgQualityBadgeTint = bgQualityBadgeTint,
+                                bgQualityBadgeDescription = bgQualityBadgeDescription,
+                                objectivesSetupPlugin = objectivesSetupPlugin,
+                                objectivesProgressText = objectivesProgressText,
+                                objectivesProgressDescription = objectivesProgressDescription,
+                                onNavigate = onNavigate,
+                                permissionsMissing = permissionsMissing,
+                                onPermissionsClick = onPermissionsClick,
+                                loopActionAvailable = loopActionAvailable,
+                                onLoopActionClick = { showLoopActionSheet = true },
+                                showMenuButtons = !circleLayout,
+                                modifier = Modifier.onSizeChanged {
+                                    if (it.height > 0 && it.height != bottomBarHeightPx) bottomBarHeightPx = it.height
+                                }
+                            )
+                        }
+
+                        // Quick launch toolbar overlay
+                        AnimatedVisibility(
+                            visible = hasToolbar && showChrome,
+                            enter = slideInVertically { it },
+                            exit = slideOutVertically { it },
+                            modifier = Modifier
+                                .align(Alignment.BottomCenter)
+                                .padding(
+                                    bottom = scaffoldPadding.calculateBottomPadding() + bottomBarHeight + 8.dp
+                                )
+                        ) {
+                            QuickLaunchToolbar(
+                                items = toolbarItems,
+                                onActionClick = { action ->
+                                    if (action is QuickLaunchAction.SheetAction) when (action.sheet) {
+                                        HomeSheet.TREATMENTS -> {
+                                            treatmentViewModel.refreshState()
+                                            showTreatmentSheet = true
+                                        }
+
+                                        HomeSheet.SCENES     -> {
+                                            scenesViewModel.refreshState()
+                                            showAutomationSheet = true
+                                        }
+
+                                        HomeSheet.MANAGE       -> manageSheetState.show()
+                                        HomeSheet.TEMP_TARGETS -> showTempTargetSheet = true
+                                    }
+                                    else onQuickLaunchActionClick(action)
+                                },
+                                itemSize = if (circleLayout) AapsSpacing.homeToolbarHeight else 48.dp,
+                                iconSize = if (circleLayout) AapsSpacing.homeToolbarIconSize else 24.dp,
+                                panelStyle = circleLayout,
+                                modifier = Modifier.onSizeChanged {
+                                    if (it.height > 0 && it.height != toolbarHeightPx) toolbarHeightPx = it.height
+                                }
+                            )
+                        }
+
+                        // Tap overlay to restore chrome in preview mode (only when hidden)
+                        if (previewMode && !chromeVisible) {
+                            // Named: the top bar, menu and toolbar come back only through this, and a
+                            // screen reader announced it as a nameless control.
+                            val showControls = stringResource(UiStrings.a11y_show_controls)
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .clickable(
+                                        interactionSource = interactionSource,
+                                        indication = null
+                                    ) { chromeVisible = true }
+                                    .semantics { contentDescription = showControls }
+                            )
+                        }
                     }
                 }
             }
@@ -514,6 +570,16 @@ fun MainScreen(
             sceneItems = automationState.sceneItems,
             onSceneClick = { sceneId -> mainViewModel.requestSceneConfirmation(sceneId) },
             onEditScenesClick = { onNavigate(NavigationRequest.Element(ElementType.SCENE_MANAGEMENT)) }
+        )
+    }
+
+    // Temp target presets. A tap goes the same way as a temp target preset button on the toolbar:
+    // protection check first, then a confirmation.
+    if (showTempTargetSheet) {
+        TempTargetsBottomSheet(
+            presets = remember { mainViewModel.tempTargetPresets() },
+            onPresetClick = { onQuickLaunchActionClick(QuickLaunchAction.TempTargetPreset(it.id)) },
+            onDismiss = { showTempTargetSheet = false }
         )
     }
 

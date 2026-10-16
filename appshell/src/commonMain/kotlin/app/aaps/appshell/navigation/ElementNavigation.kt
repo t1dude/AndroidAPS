@@ -228,6 +228,9 @@ fun ElementNavigator.handleQuickLaunchAction(action: QuickLaunchAction) {
             val index = activePlugin.getPluginsList().indexOfFirst { it::class.simpleName == action.className }
             if (index >= 0) navController.navigate(AppRoute.PluginContent.createRoute(index))
         }
+
+        // The home screen opens its own menus before the action gets here
+        is QuickLaunchAction.SheetAction       -> Unit
     }
 }
 

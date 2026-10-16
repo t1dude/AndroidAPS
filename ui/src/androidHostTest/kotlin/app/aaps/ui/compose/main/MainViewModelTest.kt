@@ -39,6 +39,7 @@ import app.aaps.core.interfaces.ui.UrlOpener
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.BooleanKey
+import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.AppPlatform
 import app.aaps.core.keys.interfaces.Preferences
@@ -144,6 +145,7 @@ internal class MainViewModelTest {
         // toolbar when the first runTest runs the deferred collectors, and an unstubbed isValid (false)
         // would then remove every action from the saved toolbar.
         whenever(quickLaunchResolver.isValid(any())).thenReturn(true)
+        whenever(preferences.observe(StringKey.OverviewHomeScreenDesign)).thenReturn(MutableStateFlow("default"))
 
         sut = buildSut()
     }

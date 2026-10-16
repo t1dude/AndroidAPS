@@ -104,6 +104,17 @@ enum class StringKey(
         ),
         defaultedBySM = true
     ),
+    OverviewHomeScreenDesign(
+        key = "home_screen_design",
+        defaultValue = "default",
+        title = KeysStrings.pref_title_home_screen_design,
+        summary = KeysStrings.pref_summary_home_screen_design,
+        preferenceType = PreferenceType.LIST,
+        entriesRefs = mapOf(
+            "default" to KeysStrings.pref_home_screen_default,
+            "circle" to KeysStrings.pref_home_screen_circle
+        )
+    ),
 
     AapsDirectoryUri(key = "aaps_directory", defaultValue = "", title = KeysStrings.pref_title_aaps_directory),
 

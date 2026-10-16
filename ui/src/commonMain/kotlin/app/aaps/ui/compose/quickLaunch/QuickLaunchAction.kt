@@ -67,6 +67,12 @@ sealed class QuickLaunchAction {
         override val elementType = ElementType.SCENE
     }
 
+    /** Opens one of the home screen menus (bottom sheets). Handled by the home screen itself. */
+    data class SheetAction(val sheet: HomeSheet) : QuickLaunchAction() {
+
+        override val typeId: String = "sheet_" + sheet.name.lowercase()
+    }
+
     data class PluginAction(val className: String) : QuickLaunchAction() {
 
         override val typeId = "plugin"
@@ -103,9 +109,17 @@ sealed class QuickLaunchAction {
         val Fill = StaticAction(ElementType.FILL)
         val SiteRotation = StaticAction(ElementType.SITE_ROTATION)
         val QuickLaunchConfig = StaticAction(ElementType.QUICK_LAUNCH_CONFIG)
+        val TreatmentsSheet = SheetAction(HomeSheet.TREATMENTS)
+        val ScenesSheet = SheetAction(HomeSheet.SCENES)
+        val ManageSheet = SheetAction(HomeSheet.MANAGE)
+        val TempTargetsSheet = SheetAction(HomeSheet.TEMP_TARGETS)
+
+        /** The home screen menus, offered in their own section of the configuration screen */
+        val sheetActions: List<QuickLaunchAction> = listOf(TreatmentsSheet, ScenesSheet, ManageSheet, TempTargetsSheet)
 
         /**
-         * All static actions available for the configuration screen (excluding QuickLaunchConfig).
+         * All static actions available for the configuration screen (excluding QuickLaunchConfig). The home
+         * screen menus ([sheetActions]) come first, in their own section.
          *
          * The management block follows the order of the Manage sheet, so the two lists read the same
          * way, with `RUNNING_MODE` after it - that one is a management screen too, but the sheet does
@@ -114,7 +128,7 @@ sealed class QuickLaunchAction {
          * rather than opening a screen and already has one [SceneAction] per scene, and
          * `PAIR_WITH_MASTER`, which is a one time setup step and not something to keep on a toolbar.
          */
-        val staticActions: List<QuickLaunchAction> = listOf(
+        val staticActions: List<QuickLaunchAction> = sheetActions + listOf(
             Insulin, Carbs, Wizard, Treatment, Cgm, Calibration,
             ProfileSwitch, InsulinManagement, TempTargetManagement, QuickWizardManagement,
             SceneManagement, AutomationManagement, FoodManagement, RunningMode,
@@ -131,3 +145,6 @@ sealed class QuickLaunchAction {
             ?: if (typeId == QuickLaunchConfig.typeId) QuickLaunchConfig else null
     }
 }
+
+/** The menus of the home screen that can be opened from the quick launch toolbar */
+enum class HomeSheet { TREATMENTS, SCENES, MANAGE, TEMP_TARGETS }

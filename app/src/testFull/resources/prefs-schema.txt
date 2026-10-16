@@ -124,6 +124,7 @@ carelevo_patch_info|CarelevoStringNonKey|false
 carelevo_temp_basal_infusion_info|CarelevoStringNonKey|false
 carelevo_user_setting_info|CarelevoStringNonKey|false
 categorize_uam_as_basal|BooleanKey|true
+circle_home_chips|StringNonKey|true
 combov2-bt-address-key|ComboStringNonKey|true
 combov2-cp-cipher-key|ComboStringNonKey|true
 combov2-key-response-address-key|ComboIntNonKey|true
@@ -213,6 +214,7 @@ half_basal_exercise_target|IntKey|true
 high_mark|UnitDoubleKey|true
 high_temptarget_raises_sensitivity|BooleanKey|true
 higher_ISFrange_weight|DoubleKey|true
+home_screen_design|StringKey|true
 hourly_max_insulin|MedtrumIntKey|true
 insight_disable_vibration_auto|InsightBooleanKey|true
 insight_disable_vibration|InsightBooleanKey|true

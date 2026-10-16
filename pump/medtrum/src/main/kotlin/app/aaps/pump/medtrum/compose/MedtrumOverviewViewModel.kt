@@ -3,9 +3,11 @@ package app.aaps.pump.medtrum.compose
 import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -37,6 +39,7 @@ import app.aaps.core.ui.compose.pump.tickerFlow
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
+import app.aaps.pump.medtrum.handover.MedtrumSessionTransfer
 import app.aaps.pump.medtrum.code.ConnectionState
 import app.aaps.pump.medtrum.code.PatchStep
 import app.aaps.pump.medtrum.comm.enums.BasalType
@@ -66,6 +69,8 @@ sealed class MedtrumOverviewEvent {
     data class StartPatchWorkflow(val startStep: PatchStep) : MedtrumOverviewEvent()
     data class ShowDialog(val title: String, val message: String) : MedtrumOverviewEvent()
     data object ConfirmUnpair : MedtrumOverviewEvent()
+    data object ConfirmMoveSessionOut : MedtrumOverviewEvent()
+    data object ConfirmTakeSessionIn : MedtrumOverviewEvent()
 }
 
 // Registers itself: @ViewModelKey infers the key from the class. No graph entry, and deliberately
@@ -86,7 +91,8 @@ class MedtrumOverviewViewModel(
     private val ch: ConcentrationHelper,
     private val preferences: Preferences,
     private val uel: UserEntryLogger,
-    private val context: Context
+    private val context: Context,
+    private val sessionTransfer: MedtrumSessionTransfer
 ) : ViewModel() {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -108,7 +114,8 @@ class MedtrumOverviewViewModel(
         medtrumPump.lastBolusAmountFlow,
         medtrumPump.lastConnectionFlow,
         communicationStatus.refreshTrigger,
-        tickerFlow(60_000L)
+        tickerFlow(60_000L),
+        sessionTransfer.movedAway
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val connectionState = values[0] as ConnectionState
@@ -162,6 +169,30 @@ class MedtrumOverviewViewModel(
         _events.tryEmit(MedtrumOverviewEvent.ConfirmUnpair)
     }
 
+    fun onMoveSessionOutClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionOut)
+    }
+
+    fun onTakeSessionInClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmTakeSessionIn)
+    }
+
+    /** Handover test: the patch session goes to a file, and this phone stops talking to the patch. */
+    fun performMoveSessionOut() {
+        scope.launch {
+            val message = sessionTransfer.moveOut()
+            _events.tryEmit(MedtrumOverviewEvent.ShowDialog(rh.gs(R.string.handover_test_move_out), message))
+        }
+    }
+
+    /** Handover test: the newest patch session file is taken in, and this phone drives the patch. */
+    fun performTakeSessionIn() {
+        scope.launch {
+            val message = sessionTransfer.takeIn()
+            _events.tryEmit(MedtrumOverviewEvent.ShowDialog(rh.gs(R.string.handover_test_take_in), message))
+        }
+    }
+
     fun performUnpair() {
         aapsLogger.debug(LTag.PUMP, "performUnpair")
         uel.log(Action.CLEAR_PAIRING_KEYS, Sources.Medtrum)
@@ -207,7 +238,9 @@ class MedtrumOverviewViewModel(
         lastConnectionTime: Long
     ): PumpOverviewUiState {
         // Status banner: communication status from shared helper, or pump-specific warning
-        val statusBanner = buildStatusBanner(pumpState) ?: communicationStatus.statusBanner()
+        val statusBanner =
+            if (sessionTransfer.isMovedAway) StatusBanner(text = rh.gs(R.string.handover_test_banner), level = StatusLevel.WARNING)
+            else buildStatusBanner(pumpState) ?: communicationStatus.statusBanner()
         val queueStatus = communicationStatus.queueStatus()
 
         // Connection state for action button enablement
@@ -328,6 +361,26 @@ class MedtrumOverviewViewModel(
                     onClick = { onClickChangePatch() }
                 )
             )
+            // Handover test (phase 0): move the running patch session to another phone and back
+            if (isPaired && !sessionTransfer.isMovedAway) {
+                add(
+                    PumpAction(
+                        label = rh.gs(R.string.handover_test_move_out),
+                        icon = Icons.Filled.Upload,
+                        category = ActionCategory.MANAGEMENT,
+                        onClick = { onMoveSessionOutClick() }
+                    )
+                )
+            } else {
+                add(
+                    PumpAction(
+                        label = rh.gs(R.string.handover_test_take_in),
+                        icon = Icons.Filled.Download,
+                        category = ActionCategory.MANAGEMENT,
+                        onClick = { onTakeSessionInClick() }
+                    )
+                )
+            }
             if (isPaired) {
                 add(
                     PumpAction(

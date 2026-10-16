@@ -75,6 +75,7 @@ import app.aaps.pump.omnipod.common.bledriver.pod.response.ResponseType
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.O5PodStateManager
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.basalDrift
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.basalDelivered
+import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.expiry
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.state.withPodAcceptance
 import app.aaps.pump.omnipod.omnipod5.bledriver.pod.util.buildO5ExpirationAlerts
 import app.aaps.pump.omnipod.omnipod5.history.O5History
@@ -412,6 +413,7 @@ class O5PumpPlugin @Inject constructor(
     override fun isInitialized(): Boolean =
         podStateManager.activationProgress == ActivationProgress.COMPLETED && podStateManager.isPodRunning
     override fun isSuspended(): Boolean = podStateManager.deliverySuspended
+    override fun expiresAt(): Long? = if (isInitialized()) podStateManager.expiry?.toInstant()?.toEpochMilli() else null
 
     // The progress alone does not cover pairing: it is still NOT_STARTED until the first step is done,
     // and the queue then ran and disconnected in the middle of the pairing (Dash #5219).

@@ -280,6 +280,17 @@ class PluginLifetimeWorkScanTest {
             "readStatus(unconfirmed_command). A read. SAFE to abandon - but see handleCommandConfirmation " +
                 "below, which is the reason unconfirmed commands are being chased in the first place."
         ),
+        "O5PumpPlugin.kt#refreshStatusOnUnacknowledgedCommands" to Site(
+            1,
+            "readStatus(unconfirmed_command), the O5 port of the Dash site above. A read. SAFE to abandon."
+        ),
+        "O5PumpPlugin.kt#queueBasalCorrectionIfNeeded" to Site(
+            1,
+            "customCommand(CommandDeliverBasalCorrection), the O5 port of the Dash basal correction. DELIVERS " +
+                "INSULIN (one 0.05 U pulse). Same reasoning as OmnipodDashPumpPlugin#handleCommandConfirmation: " +
+                "the correction must still reach the pod, so this must NOT be cancelled, and cancelling would not " +
+                "stop it anyway - the command is in the queue by then. Only the result would be lost."
+        ),
         "OmnipodErosPumpPlugin.kt#queueAcknowledgeAlertsCommand" to Site(
             1,
             "customCommand(CommandSilenceAlerts), result only logged. Silencing an alert is a pod write, but " +

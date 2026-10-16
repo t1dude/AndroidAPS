@@ -51,6 +51,8 @@ class MedtrumComposeContent(
         var dialogTitle by remember { mutableStateOf("") }
         var dialogMessage by remember { mutableStateOf("") }
         var showUnpairConfirm by remember { mutableStateOf(false) }
+        var showMoveOutConfirm by remember { mutableStateOf(false) }
+        var showTakeInConfirm by remember { mutableStateOf(false) }
 
         // Toolbar configuration
         val overviewNavIcon: @Composable () -> Unit = {
@@ -101,6 +103,8 @@ class MedtrumComposeContent(
                     }
 
                     is MedtrumOverviewEvent.ConfirmUnpair      -> showUnpairConfirm = true
+                    is MedtrumOverviewEvent.ConfirmMoveSessionOut -> showMoveOutConfirm = true
+                    is MedtrumOverviewEvent.ConfirmTakeSessionIn  -> showTakeInConfirm = true
                 }
             }
         }
@@ -122,6 +126,30 @@ class MedtrumComposeContent(
                     overviewViewModel.performUnpair()
                 },
                 onDismiss = { showUnpairConfirm = false }
+            )
+        }
+
+        if (showMoveOutConfirm) {
+            OkCancelDialog(
+                title = stringResource(MedtrumR.string.handover_test_move_out),
+                message = stringResource(MedtrumR.string.handover_test_move_out_confirm),
+                onConfirm = {
+                    showMoveOutConfirm = false
+                    overviewViewModel.performMoveSessionOut()
+                },
+                onDismiss = { showMoveOutConfirm = false }
+            )
+        }
+
+        if (showTakeInConfirm) {
+            OkCancelDialog(
+                title = stringResource(MedtrumR.string.handover_test_take_in),
+                message = stringResource(MedtrumR.string.handover_test_take_in_confirm),
+                onConfirm = {
+                    showTakeInConfirm = false
+                    overviewViewModel.performTakeSessionIn()
+                },
+                onDismiss = { showTakeInConfirm = false }
             )
         }
 

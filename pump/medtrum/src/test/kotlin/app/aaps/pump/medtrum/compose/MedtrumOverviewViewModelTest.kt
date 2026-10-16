@@ -17,6 +17,7 @@ import app.aaps.core.ui.compose.StatusLevel
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
+import app.aaps.pump.medtrum.handover.MedtrumSessionTransfer
 import app.aaps.pump.medtrum.code.ConnectionState
 import app.aaps.pump.medtrum.comm.enums.AlarmState
 import app.aaps.pump.medtrum.comm.enums.BasalType
@@ -60,6 +61,7 @@ internal class MedtrumOverviewViewModelTest {
 
     private val medtrumPlugin: MedtrumPlugin = mock()
     private val medtrumPump: MedtrumPump = mock()
+    private val sessionTransfer: MedtrumSessionTransfer = mock()
 
     @BeforeEach
     fun setUp() {
@@ -68,6 +70,7 @@ internal class MedtrumOverviewViewModelTest {
         // The uiState field-initializer calls combine(...) over these non-null StateFlow getters,
         // so they must be stubbed or the getter reads NPE. bolusAmountDeliveredFlow.value is also
         // read directly by buildInitialState().
+        whenever(sessionTransfer.movedAway).thenReturn(MutableStateFlow(false))
         whenever(medtrumPump.connectionStateFlow).thenReturn(MutableStateFlow(ConnectionState.DISCONNECTED))
         whenever(medtrumPump.pumpStateFlow).thenReturn(MutableStateFlow(MedtrumPumpState.NONE))
         whenever(medtrumPump.lastBasalTypeFlow).thenReturn(MutableStateFlow(BasalType.NONE))
@@ -118,12 +121,14 @@ internal class MedtrumOverviewViewModelTest {
         whenever(rh.gs(R.string.reset_alarms_label)).thenReturn("Reset alarms")
         whenever(rh.gs(R.string.change_patch_label)).thenReturn("Change patch")
         whenever(rh.gs(CoreUiR.string.pump_unpair)).thenReturn("Unpair")
+        whenever(rh.gs(R.string.handover_test_move_out)).thenReturn("Move patch session out (test)")
+        whenever(rh.gs(R.string.handover_test_take_in)).thenReturn("Take patch session in (test)")
         whenever(rh.gs(CoreUiStrings.pump_unpair)).thenReturn("Unpair")
     }
 
     private fun createViewModel() = MedtrumOverviewViewModel(
         aapsLogger, rh, profileFunction, commandQueue, rxBus, dateUtil,
-        medtrumPlugin, medtrumPump, ch, preferences, uel, context
+        medtrumPlugin, medtrumPump, ch, preferences, uel, context, sessionTransfer
     )
 
     @Test
@@ -142,6 +147,9 @@ internal class MedtrumOverviewViewModelTest {
         assertThat(state.primaryActions.first { it.label == "Refresh" }.enabled).isFalse()
         assertThat(state.managementActions.map { it.label }).contains("Change patch")
         assertThat(state.managementActions.map { it.label }).doesNotContain("Unpair")
+        // Handover test: a phone with no patch can take a session in, and has nothing to move out
+        assertThat(state.managementActions.map { it.label }).contains("Take patch session in (test)")
+        assertThat(state.managementActions.map { it.label }).doesNotContain("Move patch session out (test)")
     }
 
     @Test
@@ -156,5 +164,8 @@ internal class MedtrumOverviewViewModelTest {
         // disconnected + pump-active -> refresh enabled
         assertThat(state.primaryActions.first { it.label == "Refresh" }.enabled).isTrue()
         assertThat(state.managementActions.map { it.label }).contains("Unpair")
+        // Handover test: a phone with a patch can move its session out, and must not take another in
+        assertThat(state.managementActions.map { it.label }).contains("Move patch session out (test)")
+        assertThat(state.managementActions.map { it.label }).doesNotContain("Take patch session in (test)")
     }
 }

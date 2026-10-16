@@ -27,6 +27,7 @@
     <queries>
         <package android:name="${applicationId}.watchfacepush.wfs" />
         <package android:name="${applicationId}.watchfacepush.cwf" />
+        <package android:name="${applicationId}.watchfacepush.circle" />
     </queries>
 
     <application
@@ -396,7 +397,7 @@
                 android:value="60" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.circle" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
         </service>
 
         <!-- The reading as text, shown inside the circle in ambient mode. HIDDEN for the same
@@ -419,7 +420,7 @@
                 android:value="300" />
             <meta-data
                 android:name="android.support.wearable.complications.SAFE_WATCH_FACES"
-                android:value="${applicationId}.watchfacepush.circle" />
+                android:value="${applicationId}.watchfacepush.wfs,${applicationId}.watchfacepush.cwf,${applicationId}.watchfacepush.circle" />
             <meta-data
                 android:name="android.support.wearable.complications.HIDDEN"
                 android:value="true" />

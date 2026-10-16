@@ -260,6 +260,13 @@ class MedtrumPump(
     val pumpSN: Long
         get() = _pumpSN
 
+    /**
+     * Serial of a patch session that was just taken in from another device (handover test). A change to
+     * this serial is the same patch, still running, so the "new patch" reset must not run for it. Any
+     * other serial is a real new patch and is reset as before.
+     */
+    @Volatile var takenInSerial: Long? = null
+
     val pumpSNFromSP: Long
         get() =
             try {

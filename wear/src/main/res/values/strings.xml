@@ -467,5 +467,10 @@
     <string name="medtrum_watch_hand_back">Hand back to phone</string>
     <string name="medtrum_watch_service_channel">Medtrum test</string>
     <string name="medtrum_watch_send_log">Send log to phone</string>
+    <string name="medtrum_watch_tbr_absolute" comment="%1$.2f=basal rate in units per hour, %2$s=time it ends, for example 18:00">Temp basal %1$.2f U/h until %2$s</string>
+    <string name="medtrum_watch_tbr_percent" comment="%1$d=percent of the profile basal, %2$s=time it ends, for example 18:00">Temp basal %1$d%% until %2$s</string>
+    <string name="medtrum_watch_no_tbr">No temp basal</string>
+    <string name="medtrum_watch_tdd" comment="%1$d=number of days, %2$.1f=average units per day">Daily dose, %1$d days: average %2$.1f U</string>
+    <string name="medtrum_watch_no_tdd">No daily doses came along</string>
 
 </resources>

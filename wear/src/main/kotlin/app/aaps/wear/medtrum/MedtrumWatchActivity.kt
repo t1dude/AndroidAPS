@@ -28,10 +28,13 @@ import androidx.wear.compose.material3.MaterialTheme
 import androidx.wear.compose.material3.ScrollIndicator
 import androidx.wear.compose.material3.Text
 import app.aaps.core.interfaces.di.injectMetroMembers
+import app.aaps.pump.medtrum.handover.HandoverTdd
+import app.aaps.pump.medtrum.handover.HandoverTemporaryBasal
 import app.aaps.wear.R
 import dev.zacsweers.metro.Inject
 import java.text.DateFormat
 import java.util.Date
+import kotlin.math.roundToInt
 
 /**
  * Handover test on the watch: the Medtrum patch session the phone handed over. Reads the patch status,
@@ -63,6 +66,8 @@ class MedtrumWatchActivity : ComponentActivity() {
                             item { Centered(stringResource(R.string.medtrum_watch_patch, status.serial.toString(16))) }
                             item { Centered(lastRead(status)) }
                             status.result?.let { result -> item { Centered(result) } }
+                            item { Centered(temporaryBasal(status.extras.temporaryBasal)) }
+                            item { Centered(dailyDoses(status.extras.tdds)) }
                             if (!hasBluetoothPermission()) {
                                 item {
                                     Button(
@@ -107,6 +112,17 @@ class MedtrumWatchActivity : ComponentActivity() {
     private fun hasBluetoothPermission(): Boolean =
         listOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)
             .all { ContextCompat.checkSelfPermission(this, it) == PackageManager.PERMISSION_GRANTED }
+
+    private fun temporaryBasal(tbr: HandoverTemporaryBasal?): String {
+        if (tbr == null || tbr.end < System.currentTimeMillis()) return getString(R.string.medtrum_watch_no_tbr)
+        val end = DateFormat.getTimeInstance(DateFormat.SHORT).format(Date(tbr.end))
+        return if (tbr.isAbsolute) getString(R.string.medtrum_watch_tbr_absolute, tbr.rate, end)
+        else getString(R.string.medtrum_watch_tbr_percent, tbr.rate.roundToInt(), end)
+    }
+
+    private fun dailyDoses(tdds: List<HandoverTdd>): String =
+        if (tdds.isEmpty()) getString(R.string.medtrum_watch_no_tdd)
+        else getString(R.string.medtrum_watch_tdd, tdds.size, tdds.map { it.totalAmount }.average())
 
     private fun lastRead(status: MedtrumWatchLink.Status): String {
         val at = status.lastReadAt ?: return getString(R.string.medtrum_watch_not_read)

@@ -246,6 +246,14 @@ class EventDataTest {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }
+        EventData.MedtrumSessionToWatch("medtrum-session-1\t1000\nmedtrum_sn_input\tabc123\n").let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
+        EventData.MedtrumSessionToPhone("medtrum-session-1\t2000\nmedtrum_sn_input\tabc123\n").let {
+            assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
+            assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
+        }
         // A reading the watch took from the sensor keeps its flag through the watch's own store.
         EventData.SingleBg(dataset = 0, 1, sgv = 2.0, high = 3.0, low = 4.0, fromSensor = true).let {
             assertThat((EventData.deserializeByte(it.serializeByte()) as EventData.SingleBg).fromSensor).isTrue()

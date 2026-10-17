@@ -230,6 +230,13 @@ dependencies {
     implementation(project(":core:data"))
     // Direct-to-watch: the watch reads the Dexcom G7 itself, in the sensor's watch slot.
     implementation(project(":cgm:dexcomg7:core"))
+    // Handover test: the watch reads a Medtrum patch whose session the phone handed over. Only the
+    // Bluetooth link, the packets and the pump state are used; the plugin and its screens stay out of
+    // the watch graph (see WearGraph).
+    implementation(project(":pump:medtrum"))
+    // The driver's screens register with @ViewModelKey. Metro reads that key while it leaves the screens out,
+    // so the annotation must be on this module's classpath.
+    implementation(libs.metrox.viewmodel)
 
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.core)

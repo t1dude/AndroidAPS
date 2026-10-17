@@ -18,6 +18,7 @@ import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.g7.G7WatchDirect
+import app.aaps.wear.medtrum.MedtrumWatchLink
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
@@ -48,6 +49,7 @@ class WearApp : Application(), MetroMemberInjector {
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
     @Inject lateinit var cwfComplicationUpdater: CwfComplicationUpdater
     @Inject lateinit var g7WatchDirect: G7WatchDirect
+    @Inject lateinit var medtrumWatchLink: MedtrumWatchLink
 
     /**
      * Held in a field on purpose: `SharedPreferences` keeps its change listeners in a
@@ -77,6 +79,8 @@ class WearApp : Application(), MetroMemberInjector {
         cwfComplicationUpdater.start()
         // Direct-to-watch: listens for the phone turning it on, and picks a set-up sensor up again after a restart
         g7WatchDirect.start()
+        // Handover test: listens for the phone handing over a Medtrum patch session
+        medtrumWatchLink.start()
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }

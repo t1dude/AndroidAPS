@@ -4,6 +4,7 @@ import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.Prefs
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.rx.events.EventAppInitialized
+import app.aaps.implementation.receivers.KeepAliveWorker
 import app.aaps.wear.engine.di.EngineGraph
 import app.aaps.wear.engine.di.EngineStringOwners
 import kotlinx.coroutines.joinAll
@@ -42,6 +43,7 @@ internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?) {
     if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
         aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")
     runningModeReconciler.start()
+    runningModeExpiryScheduler.start()
     config.initCompleted()
     rxBus.send(EventAppInitialized())
     aapsLogger.info(LTag.CORE, "Engine started with ${pluginStore.plugins.size} plugins")
@@ -50,6 +52,9 @@ internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?) {
     val glucose = runCatching { activePlugin.activeBgSource.javaClass.simpleName }.getOrDefault("none")
     medtrumWatchLink.note("Engine started: ${pluginStore.plugins.count { it.isEnabled() }} of ${pluginStore.plugins.size} plugins on, pump $pump, glucose $glucose, engineering mode ${config.isEngineeringMode()}")
     engineReporter.start()
+    // As MainApp does on the phone: the pump gets the running profile, its status is read, the pump
+    // unreachable alarm is checked. Every 5 minutes, while the engine runs (cancelled at hand back).
+    KeepAliveWorker.schedule(context)
 }
 
 /** The plugin buckets in display order, as `mergePlugins` in `:app` merges them. A clash is reported, not hidden. */

@@ -250,6 +250,8 @@ dependencies {
     "fullImplementation"(project(":wear:engine"))
 
     implementation(libs.androidx.appcompat)
+    // WearApp configures WorkManager for the engine's workers (full app); the other flavours need the class too
+    implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.core)
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.legacy.support)

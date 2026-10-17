@@ -2,6 +2,7 @@ package app.aaps.wear.handover
 
 import android.content.Context
 import android.content.Intent
+import androidx.work.WorkerFactory
 import app.aaps.core.data.model.GV
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.bus.RxBus
@@ -25,6 +26,9 @@ object WatchEngineHook {
     }
 
     fun hasSession(): Boolean = false
+
+    /** No engine, no workers of its own: WorkManager builds whatever comes itself. */
+    fun workerFactory(): WorkerFactory? = null
 
     @Suppress("UNUSED_PARAMETER")
     fun menuLabel(context: Context): String = ""

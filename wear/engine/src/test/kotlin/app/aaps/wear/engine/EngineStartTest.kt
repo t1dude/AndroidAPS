@@ -1,6 +1,8 @@
 package app.aaps.wear.engine
 
 import android.content.Context
+import androidx.work.WorkManager
+import androidx.work.testing.WorkManagerTestInitHelper
 import app.aaps.core.interfaces.configuration.ExternalOptions
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.weardata.EventData
@@ -15,6 +17,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
+import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -28,6 +31,12 @@ import org.robolectric.annotation.Config
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35])
 class EngineStartTest {
+
+    @Before
+    fun setUp() {
+        // The engine's start schedules its keep alive, as the watch app's WorkManager does on the watch
+        WorkManagerTestInitHelper.initializeTestWorkManager(RuntimeEnvironment.getApplication())
+    }
 
     private fun graph(): EngineGraph = createGraphFactory<EngineGraph.Factory>().create(
         appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default),
@@ -51,6 +60,9 @@ class EngineStartTest {
         assertThat(graph.activePlugin.activeBgSource).isInstanceOf(WatchG7SourcePlugin::class.java)
         assertThat(graph.pluginStore.plugins.map { it::class }).containsNoneIn(EnginePlugins.leftOut)
         assertThat(graph.config.appInitialized).isTrue()
+        // Found on the watch: without the keep alive the virtual pump never got the profile, and the loop
+        // stopped at "no basal on the pump" on every reading
+        assertThat(WorkManager.getInstance(RuntimeEnvironment.getApplication()).getWorkInfosForUniqueWork("KeepAlive").get()).isNotEmpty()
     }
 
     /** Engineering mode is the phone's, as the last snapshot brought it: the watch has no AAPS folder for the file. */

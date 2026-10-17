@@ -13,8 +13,8 @@ import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.core.keys.PushedWatchfaceId
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.watchfaces.WatchFacePushHelper.Companion.KEY_FACE_INSTALLED
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
@@ -73,7 +73,7 @@ enum class PushedFace(val id: String) {
  * the data handler, the menu and the data layer service - and two installs ran side by side after
  * all, exactly the race the lock exists to stop. Seen on a Galaxy Watch 5.
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class WatchFacePushHelper(
     private val context: Context,

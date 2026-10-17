@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The full watch app carries the AAPS engine (:wear:engine), built from the phone's modules. Their
+    manifests bring parts of the phone app that the watch must not have. They are removed here, so they
+    can neither run nor be started from outside.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- SMS commands, location triggers and Dexcom's broadcast: phone features -->
+    <uses-permission android:name="android.permission.SEND_SMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.RECEIVE_MMS" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" tools:node="remove" />
+    <uses-permission android:name="com.dexcom.cgm.EXTERNAL_PERMISSION" tools:node="remove" />
+    <!-- Advertising id, from the analytics libraries the phone modules bring -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_AD_ID" tools:node="remove" />
+    <uses-permission android:name="android.permission.ACCESS_ADSERVICES_ATTRIBUTION" tools:node="remove" />
+
+    <application>
+        <!-- The phone's end of the phone-watch link. The watch is never the phone end of its own link. -->
+        <service
+            android:name="app.aaps.plugins.sync.wear.wearintegration.DataLayerListenerServiceMobile"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.plugins.sync.wear.receivers.WearDataReceiver"
+            tools:node="remove" />
+
+        <!-- Nightscout and the other uploads: off on the watch, the phone syncs at hand back -->
+        <service
+            android:name="app.aaps.plugins.sync.nsclientV3.services.NSClientV3Service"
+            tools:node="remove" />
+        <activity
+            android:name="app.aaps.plugins.sync.openhumans.ui.OHLoginActivity"
+            tools:node="remove" />
+        <activity
+            android:name="app.aaps.plugins.sync.tidepool.auth.AuthFlowIn"
+            tools:node="remove" />
+        <activity
+            android:name="net.openid.appauth.RedirectUriReceiverActivity"
+            tools:node="remove" />
+        <service
+            android:name="com.garmin.android.connectiq.IQGarminBindingService"
+            tools:node="remove" />
+
+        <!-- Glucose sources the watch does not use: it has its own G7 -->
+        <service
+            android:name="app.aaps.plugins.source.notificationreader.NotificationCollectorService"
+            tools:node="remove" />
+        <activity
+            android:name="app.aaps.plugins.source.activities.RequestDexcomPermissionActivity"
+            tools:node="remove" />
+
+        <!-- Phone home screen widgets and the phone's alarm screen -->
+        <activity
+            android:name="app.aaps.ui.widget.WidgetConfigureActivity"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.ui.widget.Widget"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.ui.widget.BgGraphWidget"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.ui.widget.CompactBgWidget"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.ui.widget.GlucoseCircleWidget"
+            tools:node="remove" />
+        <receiver
+            android:name="app.aaps.ui.widget.SmallWidget"
+            tools:node="remove" />
+        <receiver
+            android:name="androidx.glance.appwidget.MyPackageReplacedReceiver"
+            tools:node="remove" />
+        <activity
+            android:name="app.aaps.ui.activities.ErrorActivity"
+            tools:node="remove" />
+
+        <!-- Location triggers of automation: no location on the watch -->
+        <service
+            android:name="app.aaps.plugins.automation.services.LocationService"
+            tools:node="remove" />
+    </application>
+
+</manifest>

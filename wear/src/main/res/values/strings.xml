@@ -456,27 +456,5 @@
     <string name="g7_watch_low">Low (from the sensor)</string>
     <string name="g7_watch_urgent_low">Urgent low (from the sensor)</string>
     <string name="g7_watch_low_message" comment="%1$s=glucose value, for example 3.1, %2$s=trend arrow">%1$s %2$s. No reading from the phone. Check your glucose.</string>
-    <!-- Handover test: a Medtrum patch session handed over by the phone -->
-    <string name="medtrum_watch_title">Medtrum test</string>
-    <string name="medtrum_watch_received">The phone handed over the Medtrum patch session. Tap to read the patch status.</string>
-    <string name="medtrum_watch_no_session">No patch session on the watch. On the phone, open the Medtrum page and tap Move patch session to watch.</string>
-    <string name="medtrum_watch_patch" comment="%1$s=patch serial number">Patch %1$s</string>
-    <string name="medtrum_watch_not_read">Not read yet</string>
-    <string name="medtrum_watch_read_ok" comment="%1$s=time, for example 14:05">Read at %1$s</string>
-    <string name="medtrum_watch_read_failed" comment="%1$s=time, for example 14:05">Read failed at %1$s</string>
-    <string name="medtrum_watch_result" comment="%1$s=pump state, for example Active; %2$.1f=units left; %3$.2f=battery volts; %4$.2f=basal rate in U/h; %5$s=basal type, for example STANDARD; %6$d=seconds the patch clock is off">%1$s\nReservoir %2$.1f U\nBattery %3$.2f V\nBasal %4$.2f U/h (%5$s)\nPatch clock off by %6$d s</string>
-    <string name="medtrum_watch_read">Read status</string>
-    <string name="medtrum_watch_reading">Reading…</string>
-    <string name="medtrum_watch_auto_on">Read every 5 min</string>
-    <string name="medtrum_watch_auto_off">Stop reading every 5 min</string>
-    <string name="medtrum_watch_auto_running">Reading the Medtrum patch every 5 minutes</string>
-    <string name="medtrum_watch_hand_back">Hand back to phone</string>
-    <string name="medtrum_watch_service_channel">Medtrum test</string>
-    <string name="medtrum_watch_send_log">Send log to phone</string>
-    <string name="medtrum_watch_tbr_absolute" comment="%1$.2f=basal rate in units per hour, %2$s=time it ends, for example 18:00">Temp basal %1$.2f U/h until %2$s</string>
-    <string name="medtrum_watch_tbr_percent" comment="%1$d=percent of the profile basal, %2$s=time it ends, for example 18:00">Temp basal %1$d%% until %2$s</string>
-    <string name="medtrum_watch_no_tbr">No temp basal</string>
-    <string name="medtrum_watch_tdd" comment="%1$d=number of days, %2$.1f=average units per day">Daily dose, %1$d days: average %2$.1f U</string>
-    <string name="medtrum_watch_no_tdd">No daily doses came along</string>
 
 </resources>

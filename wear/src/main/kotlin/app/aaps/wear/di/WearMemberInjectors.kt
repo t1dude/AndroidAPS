@@ -59,8 +59,6 @@ import app.aaps.wear.interaction.menus.MainMenuActivity
 import app.aaps.wear.interaction.menus.PreferenceMenuActivity
 import app.aaps.wear.interaction.menus.StatusMenuActivity
 import app.aaps.wear.interaction.menus.TileMenuActivity
-import app.aaps.wear.medtrum.MedtrumWatchActivity
-import app.aaps.wear.medtrum.MedtrumWatchAlarmReceiver
 import app.aaps.wear.tile.ActionsTileService
 import app.aaps.wear.tile.ActionsTileSettingsActivity
 import app.aaps.wear.tile.BgGraphTileService
@@ -77,7 +75,6 @@ import app.aaps.wear.watchfaces.CircleWatchface
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.DigitalStyleWatchface
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.ClassKey
 import dev.zacsweers.metro.ContributesTo
@@ -91,7 +88,7 @@ import dev.zacsweers.metro.Provides
  * Android builds activities, services and watch faces itself, so they cannot take dependencies in a
  * constructor. `WearMetroActivity` and `WearMetroService` call `injectMetroMembers` and land here.
  */
-@ContributesTo(AppScope::class)
+@ContributesTo(WearScope::class)
 @BindingContainer
 object WearMemberInjectors {
 
@@ -352,18 +349,6 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(G7WatchActivity::class)
     fun bindG7WatchActivity(injector: MembersInjector<G7WatchActivity>): MembersInjector<*> = injector
-
-    @Provides
-    @FeatureMemberInjectors
-    @IntoMap
-    @ClassKey(MedtrumWatchActivity::class)
-    fun bindMedtrumWatchActivity(injector: MembersInjector<MedtrumWatchActivity>): MembersInjector<*> = injector
-
-    @Provides
-    @FeatureMemberInjectors
-    @IntoMap
-    @ClassKey(MedtrumWatchAlarmReceiver::class)
-    fun bindMedtrumWatchAlarmReceiver(injector: MembersInjector<MedtrumWatchAlarmReceiver>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

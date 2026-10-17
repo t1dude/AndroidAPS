@@ -1,4 +1,4 @@
-package app.aaps.wear.medtrum
+package app.aaps.wear.engine.medtrum
 
 import android.content.BroadcastReceiver
 import android.content.Context

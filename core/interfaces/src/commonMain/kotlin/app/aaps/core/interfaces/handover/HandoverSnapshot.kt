@@ -8,7 +8,8 @@ package app.aaps.core.interfaces.handover
  * - [SETTINGS]: the phone's exportable settings, one `name<TAB>value` per line. Device state and secrets are
  *   not exportable, so they do not travel (a paired device's address, the Nightscout token, ...).
  * - [PUMP_SESSION]: the pump driver's session, in the driver's own text form.
- * - [MANIFEST]: `name<TAB>value` lines: [KEY_DATABASE_VERSION], [KEY_BUILD_VERSION], [KEY_CREATED_AT].
+ * - [MANIFEST]: `name<TAB>value` lines: [KEY_DATABASE_VERSION], [KEY_BUILD_VERSION], [KEY_CREATED_AT],
+ *   [KEY_ENGINEERING_MODE].
  */
 object HandoverSnapshot {
 
@@ -23,6 +24,12 @@ object HandoverSnapshot {
     const val KEY_DATABASE_VERSION = "database_version"
     const val KEY_BUILD_VERSION = "build_version"
     const val KEY_CREATED_AT = "created_at"
+
+    /**
+     * Whether the phone runs in engineering mode (the `engineering_mode` file in its AAPS extra folder). The
+     * watch has no such folder, so it takes the phone's state; without it a dev build keeps closed loop off.
+     */
+    const val KEY_ENGINEERING_MODE = "engineering_mode"
 
     /** How far back the records go: autosens looks at 24 hours, the insulin of the hours before still acts. */
     const val WINDOW_HOURS = 30L

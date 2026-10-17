@@ -48,7 +48,7 @@ internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?) {
     // A line for the test log only: it must never stop the start
     val pump = runCatching { activePlugin.activePump.selectedActivePump().javaClass.simpleName }.getOrDefault("none")
     val glucose = runCatching { activePlugin.activeBgSource.javaClass.simpleName }.getOrDefault("none")
-    medtrumWatchLink.note("Engine started: ${pluginStore.plugins.count { it.isEnabled() }} of ${pluginStore.plugins.size} plugins on, pump $pump, glucose $glucose")
+    medtrumWatchLink.note("Engine started: ${pluginStore.plugins.count { it.isEnabled() }} of ${pluginStore.plugins.size} plugins on, pump $pump, glucose $glucose, engineering mode ${config.isEngineeringMode()}")
     engineReporter.start()
 }
 

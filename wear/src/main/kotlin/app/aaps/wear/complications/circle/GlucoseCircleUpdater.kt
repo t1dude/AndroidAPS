@@ -11,7 +11,7 @@ import app.aaps.core.interfaces.logging.LTag
 import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.complications.cwf.CwfFaceComplication
 import app.aaps.wear.data.ComplicationDataRepository
-import dev.zacsweers.metro.AppScope
+import app.aaps.wear.di.WearScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
@@ -31,7 +31,7 @@ import kotlinx.coroutines.launch
  *
  * Does nothing unless a face asked for the picture in the last ten minutes.
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class GlucoseCircleUpdater(
     private val context: Context,

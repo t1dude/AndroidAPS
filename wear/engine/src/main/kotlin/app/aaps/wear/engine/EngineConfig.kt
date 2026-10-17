@@ -1,5 +1,6 @@
 package app.aaps.wear.engine
 
+import android.content.Context
 import android.os.Build
 
 import app.aaps.core.interfaces.configuration.Config
@@ -22,12 +23,13 @@ import kotlinx.coroutines.flow.update
 
 /**
  * The engine's build: a full AAPS that runs the loop and drives pumps, the counterpart of the phone's
- * `ConfigImpl`. No external option files: the watch has no AAPS folder of its own.
+ * `ConfigImpl`. The watch has no AAPS folder for external option files, so engineering mode is the phone's,
+ * as the last handover snapshot brought it ([ENGINEERING_MODE_KEY] in [STATE_FILE]). The other options are off.
  */
 @ContributesBinding(AppScope::class, binding = binding<Config>())
 @SingleIn(AppScope::class)
 @Inject
-class EngineConfig(private val buildInfo: EngineBuildInfo) : Config {
+class EngineConfig(private val buildInfo: EngineBuildInfo, private val context: Context) : Config {
 
     override val SUPPORTED_NS_VERSION = 150000
     override val APS = true
@@ -84,7 +86,15 @@ class EngineConfig(private val buildInfo: EngineBuildInfo) : Config {
     }
 
     override fun isEngineeringModeOrRelease(): Boolean = isEngineeringMode() || !isDev()
-    override fun isEngineeringMode(): Boolean = false
+    override fun isEngineeringMode(): Boolean =
+        context.getSharedPreferences(STATE_FILE, Context.MODE_PRIVATE).getBoolean(ENGINEERING_MODE_KEY, false)
     override fun isDev(): Boolean = (VERSION.contains("-") || VERSION.matches(Regex(".*[a-zA-Z]+.*"))) && !VERSION.contains("-beta") && !VERSION.contains("-rc")
-    override fun isEnabled(option: ExternalOptions): Boolean = false
+    override fun isEnabled(option: ExternalOptions): Boolean = option == ExternalOptions.ENGINEERING_MODE && isEngineeringMode()
+
+    companion object {
+
+        /** What the engine keeps about the last handover, outside its settings (which the phone's replace). */
+        const val STATE_FILE = "aaps_engine_handover"
+        const val ENGINEERING_MODE_KEY = "engineering_mode"
+    }
 }

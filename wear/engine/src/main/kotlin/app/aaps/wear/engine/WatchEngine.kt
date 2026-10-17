@@ -157,11 +157,15 @@ object WatchEngine {
                 Log.e(TAG, "Handover snapshot refused: no database in it")
                 return null
             }
+            // Before the engine is built: its config reads this
+            val engineeringMode = manifest[HandoverSnapshot.KEY_ENGINEERING_MODE].toBoolean()
+            context.getSharedPreferences(EngineConfig.STATE_FILE, Context.MODE_PRIVATE).edit()
+                .putBoolean(EngineConfig.ENGINEERING_MODE_KEY, engineeringMode).commit()
             val target = context.getDatabasePath(DATABASE_FILE)
             target.parentFile?.mkdirs()
             listOf("", "-wal", "-shm", "-journal").forEach { File(target.path + it).delete() }
             target.writeBytes(database)
-            Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}")
+            Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}, engineering mode $engineeringMode")
             return Snapshot(
                 settings = HandoverSnapshot.decodeLines(entries[HandoverSnapshot.SETTINGS]?.decodeToString().orEmpty()),
                 pumpSession = entries[HandoverSnapshot.PUMP_SESSION]?.decodeToString().orEmpty()

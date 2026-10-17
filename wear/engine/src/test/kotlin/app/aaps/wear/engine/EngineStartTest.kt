@@ -1,5 +1,7 @@
 package app.aaps.wear.engine
 
+import android.content.Context
+import app.aaps.core.interfaces.configuration.ExternalOptions
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.objects.di.CoreObjectsGraph
@@ -49,6 +51,22 @@ class EngineStartTest {
         assertThat(graph.activePlugin.activeBgSource).isInstanceOf(WatchG7SourcePlugin::class.java)
         assertThat(graph.pluginStore.plugins.map { it::class }).containsNoneIn(EnginePlugins.leftOut)
         assertThat(graph.config.appInitialized).isTrue()
+    }
+
+    /** Engineering mode is the phone's, as the last snapshot brought it: the watch has no AAPS folder for the file. */
+    @Test
+    fun engineeringModeFollowsThePhone() {
+        val graph = graph()
+        val state = RuntimeEnvironment.getApplication().getSharedPreferences(EngineConfig.STATE_FILE, Context.MODE_PRIVATE)
+
+        state.edit().putBoolean(EngineConfig.ENGINEERING_MODE_KEY, false).commit()
+        assertThat(graph.config.isEngineeringMode()).isFalse()
+        assertThat(graph.config.isEnabled(ExternalOptions.ENGINEERING_MODE)).isFalse()
+
+        state.edit().putBoolean(EngineConfig.ENGINEERING_MODE_KEY, true).commit()
+        assertThat(graph.config.isEngineeringMode()).isTrue()
+        assertThat(graph.config.isEnabled(ExternalOptions.ENGINEERING_MODE)).isTrue()
+        assertThat(graph.config.isEngineeringModeOrRelease()).isTrue()
     }
 
     /**

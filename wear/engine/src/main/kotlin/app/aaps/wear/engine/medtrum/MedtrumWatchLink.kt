@@ -1,4 +1,4 @@
-package app.aaps.wear.medtrum
+package app.aaps.wear.engine.medtrum
 
 import android.app.AlarmManager
 import android.app.NotificationChannel
@@ -9,11 +9,10 @@ import android.content.Intent
 import android.os.Build
 import android.os.PowerManager
 import androidx.core.app.NotificationCompat
+import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.rx.bus.RxBus
-import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.pump.medtrum.MedtrumPump
@@ -31,8 +30,8 @@ import app.aaps.pump.medtrum.handover.HandoverTemporaryBasal
 import app.aaps.pump.medtrum.handover.MedtrumSession
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
-import app.aaps.wear.BuildConfig
-import app.aaps.wear.R
+import app.aaps.wear.engine.CompanionLink
+import app.aaps.wear.engine.R
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -79,7 +78,8 @@ import kotlin.math.roundToLong
 class MedtrumWatchLink(
     private val context: Context,
     private val aapsLogger: AAPSLogger,
-    private val rxBus: RxBus,
+    private val companion: CompanionLink,
+    private val config: Config,
     private val preferences: Preferences,
     private val medtrumPump: MedtrumPump,
     private val transport: MedtrumBleTransport,
@@ -127,12 +127,16 @@ class MedtrumWatchLink(
     /** The Bluetooth permissions the driver uses exist from Android 12. */
     val isSupported: Boolean get() = Build.VERSION.SDK_INT >= Build.VERSION_CODES.S
 
+    /** A session the phone handed over (see `WatchEngine.onMessageFromPhone`). */
+    fun receiveSession(text: String) {
+        scope.launch { takeIn(text) }
+    }
+
     fun start() {
         if (started) return
         started = true
         medtrumPump.loadVarsFromSP()
         _status.update { it.copy(serial = currentSerial(), log = tailLines(), extras = savedExtras()) }
-        scope.launch { rxBus.toFlow(EventData.MedtrumSessionToWatch::class).collect { takeIn(it.session) } }
         // The app was restarted while reading every 5 minutes: go on
         if (state.getBoolean(KEY_AUTO_READ, false) && _status.value.hasSession) {
             log("App restarted, reading every 5 minutes goes on")
@@ -192,7 +196,7 @@ class MedtrumWatchLink(
     fun sendLog() {
         scope.launch {
             log("Log sent to the phone")
-            rxBus.send(EventWearToMobile(EventData.MedtrumWatchLog(logForPhone())))
+            companion.sendToPhone(EventData.MedtrumWatchLog(logForPhone()))
         }
     }
 
@@ -208,7 +212,7 @@ class MedtrumWatchLink(
                 val session = MedtrumSession.read(preferences, System.currentTimeMillis()).withExtras(_status.value.extras)
                 _status.update { it.copy(serial = 0L, result = null, lastReadOk = null) }
                 log("Session of patch ${session.serial.toString(16)} handed back to the phone")
-                rxBus.send(EventWearToMobile(EventData.MedtrumSessionToPhone(session.toText(), logForPhone())))
+                companion.sendToPhone(EventData.MedtrumSessionToPhone(session.toText(), logForPhone()))
             }
         }
     }
@@ -228,7 +232,7 @@ class MedtrumWatchLink(
         log("----- Took in the session of patch ${session.serial.toString(16)}, exported ${time(session.exportedAt)}")
         log("Came along: ${extras.tdds.size} daily doses ${extras.tdds.map { "%.1f".format(Locale.US, it.totalAmount) }}, temporary basal ${describe(extras.temporaryBasal)}")
         log(
-            "Watch ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), AAPS ${BuildConfig.BUILDVERSION}, " +
+            "Watch ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), AAPS ${config.BUILD_VERSION}, " +
                 "battery unrestricted: ${isBatteryUnrestricted()}"
         )
         notifySessionReceived()
@@ -471,7 +475,7 @@ class MedtrumWatchLink(
         manager.createNotificationChannel(NotificationChannel(CHANNEL_ID, context.getString(R.string.medtrum_watch_title), NotificationManager.IMPORTANCE_HIGH))
         val open = PendingIntent.getActivity(context, 0, Intent(context, MedtrumWatchActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(context, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_icon)
+            .setSmallIcon(context.applicationInfo.icon)
             .setContentTitle(context.getString(R.string.medtrum_watch_title))
             .setContentText(context.getString(R.string.medtrum_watch_received))
             .setContentIntent(open)

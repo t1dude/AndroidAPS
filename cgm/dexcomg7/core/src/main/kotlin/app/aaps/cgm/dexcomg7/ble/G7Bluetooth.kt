@@ -15,9 +15,6 @@ import android.os.ParcelUuid
 import androidx.core.content.ContextCompat
 import app.aaps.cgm.dexcomg7.protocol.G7Advertisement
 import app.aaps.cgm.dexcomg7.protocol.G7Gatt
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import java.util.UUID
 
 /** One advertisement seen during a scan. */
@@ -28,8 +25,7 @@ class G7ScanResult(val address: String, val advertisement: G7Advertisement, val 
  * and looking up a device by address.
  */
 @SuppressLint("MissingPermission")
-@SingleIn(AppScope::class)
-@Inject
+// One per app, built and scoped where it is bound: G7CoreBindings on the phone, WearG7Bindings on the watch
 class G7Bluetooth(private val context: Context) {
 
     private val adapter: BluetoothAdapter?

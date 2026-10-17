@@ -1,4 +1,4 @@
-package app.aaps.wear.medtrum
+package app.aaps.wear.engine.medtrum
 
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -11,7 +11,7 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.app.NotificationCompat
 import androidx.core.app.ServiceCompat
-import app.aaps.wear.R
+import app.aaps.wear.engine.R
 
 /**
  * Handover test: keeps the watch app a foreground service of type connectedDevice while it reads the
@@ -29,7 +29,7 @@ class MedtrumWatchService : Service() {
         )
         val open = PendingIntent.getActivity(this, 0, Intent(this, MedtrumWatchActivity::class.java), PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(this, CHANNEL_ID)
-            .setSmallIcon(R.drawable.ic_icon)
+            .setSmallIcon(applicationInfo.icon)
             .setContentTitle(getString(R.string.medtrum_watch_title))
             .setContentText(getString(R.string.medtrum_watch_auto_running))
             .setPriority(NotificationCompat.PRIORITY_LOW)

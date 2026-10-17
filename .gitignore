@@ -13,6 +13,8 @@ build/
 .idea/*
 !.idea/codeStyles/
 full/
+# ...but not the full watch app's own sources (the AAPS engine hook)
+!wear/src/full/
 app/com.crashlytics.settings.json
 app/session_analytics.tap
 .project

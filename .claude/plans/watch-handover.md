@@ -106,6 +106,40 @@ So the transfer must be:
 
 ### Phase 1 - the watch app with two roles
 
+**Design (user chose option A, 2026-10-17, after input from Tim):** one watch app, the engine in its own
+module, and the AAPS phone app left as it is. Not the phone app built a second time for the watch:
+that needs many changes inside the phone app, which Tim avoided on purpose.
+
+- **`:wear:engine`**, an Android library in the `full` watch app. It holds `EngineGraph`, the watch's
+  own Metro root for `AppScope`, built like `AppRootGraph` (the phone), `IosAppGraph` and
+  `DesktopAppGraph` already are: the modules contribute their own bindings, the graph adds the few the
+  phone app adds itself (`AppAndroidBindings`, `SharedImplBindings`, ...).
+- **The companion graph moves to its own scope, `WearScope`.** Metro merges every `AppScope`
+  contribution on the classpath into every `AppScope` graph, so with the engine on the classpath the
+  companion graph would otherwise take in the whole engine. The G7 core classes are scoped where they
+  are used (phone `AppScope`, watch `WearScope`) instead of on the class.
+- **Only what the watch uses is in the engine** (user, 2026-10-17): Medtrum, Dash and Omnipod 5 only
+  (virtual pump for tests), the loop, its safety limits, profile, insulin, sensitivity. No Nightscout
+  or other sync, no other CGM sources, no SMS. Plugins in shared modules that the watch does not use
+  are left out of `EngineGraph` with `excludes`, so they are never built, and a fixed list says which
+  plugins may run, whatever imported settings ask for.
+  Still open (ask the user): automation, autotune and smoothing on the watch.
+- **The engine runs only while the watch holds the pump** (Tim's battery lesson: in Watch-APS the
+  phone link kept waking and running the whole engine). The graph is built and the plugins started at
+  handover, stopped at handback. In companion mode nothing of the engine runs.
+- **Same process as the companion, to start with.** The companion keeps the G7 (direct to watch) and
+  hands its readings to the engine. The engine's watch plugin talks to the companion in the process
+  instead of over Bluetooth to the phone. A separate process can come later if memory or crashes ask
+  for it.
+- **Its own settings file and database** on the watch, so engine and companion settings never mix.
+- **Loop cycle**: on each G7 reading, plus an alarm as a fallback when a reading is late.
+- **minSdk 31 for the `full` watch app** (the engine modules need Android 12). The client flavours stay
+  at 30.
+- **Order**: the engine builds and starts on the watch with the virtual pump, open loop (test T2:
+  battery, a steady cycle over a night). Then the Medtrum session is taken into the engine's own
+  Medtrum plugin, exactly as phone B did in T1, open loop first. Then low glucose suspend, then closed
+  loop (Phase 4). The Medtrum test screen moves into the engine until the engine replaces it.
+
 - New module (working name `:watchapp`): the wear companion UI plus the AAPS engine. Installed instead
   of `:wear` on handover-capable watches only (Android 12+, minSdk 31). `:wear` stays as it is for
   everyone else.

@@ -52,6 +52,7 @@ import app.aaps.wear.complications.SgvLargeComplication
 import app.aaps.wear.complications.TargetComplication
 import app.aaps.wear.complications.UploaderBatteryComplication
 import app.aaps.wear.data.ComplicationDataRepository
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.interaction.WatchfaceConfigurationActivity
 import app.aaps.wear.interaction.actions.AcceptActivity
 import app.aaps.wear.interaction.actions.ContactingMasterActivity
@@ -67,7 +68,6 @@ import app.aaps.wear.tile.UserActionTileService
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import com.google.android.gms.wearable.WearableListenerService
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +77,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class DataHandlerWear(
     private val context: Context,

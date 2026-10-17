@@ -1,0 +1,70 @@
+plugins {
+    alias(libs.plugins.android.library)
+    alias(libs.plugins.compose.compiler)
+    alias(libs.plugins.metro)
+    id("android-module-dependencies")
+    id("test-module-dependencies")
+    id("jacoco-module-dependencies")
+}
+
+android {
+    namespace = "app.aaps.wear.engine"
+}
+
+// Which module owns which string names, as `:app` generates it for the phone (see StringOwnerModules).
+// Without it a plugin's name shows as its string key. Only the modules the engine has.
+val generateEngineStringOwners = tasks.register<GenerateStringOwnerRegistryTask>("generateEngineStringOwners") {
+    owners.set(StringOwnerModules.ALL.filter { it.owner != "calibration" })
+    packageName.set("app.aaps.wear.engine.di")
+    objectName.set("EngineStringOwners")
+    useResourceIds.set(true)
+    outputDir.set(layout.buildDirectory.dir("generated/stringOwners"))
+}
+
+androidComponents {
+    onVariants { variant ->
+        variant.sources.kotlin?.addGeneratedSourceDirectory(generateEngineStringOwners, GenerateStringOwnerRegistryTask::outputDir)
+    }
+}
+
+// The AAPS engine on the watch (handover): the loop, its safety limits and the pump drivers, run by the
+// watch while it holds the pump. Only in the `full` watch app. Its graph (`EngineGraph`) is built from the
+// same modules as the phone's, minus what the watch does not use.
+dependencies {
+    implementation(project(":shared:impl"))
+    implementation(project(":core:data"))
+    implementation(project(":core:graph"))
+    implementation(project(":core:interfaces"))
+    implementation(project(":core:keys"))
+    implementation(project(":core:nssdk"))
+    implementation(project(":core:objects"))
+    implementation(project(":core:ui"))
+    implementation(project(":core:utils"))
+    implementation(project(":implementation"))
+    implementation(project(":database:impl"))
+    implementation(project(":database:persistence"))
+    implementation(project(":workflow"))
+    implementation(project(":ui"))
+
+    implementation(project(":plugins:aps"))
+    implementation(project(":plugins:configuration"))
+    implementation(project(":plugins:constraints"))
+    implementation(project(":plugins:main"))
+    implementation(project(":plugins:sensitivity"))
+    implementation(project(":plugins:smoothing"))
+    implementation(project(":plugins:source"))
+    implementation(project(":plugins:sync"))
+    implementation(project(":plugins:automation"))
+
+    implementation(project(":pump:virtual"))
+    implementation(project(":pump:medtrum"))
+
+    implementation(libs.androidx.core)
+    implementation(libs.androidx.work.runtime)
+    implementation(libs.metrox.viewmodel)
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.androidx.wear.compose.material3)
+    implementation(libs.androidx.wear.compose.foundation)
+
+    testImplementation(project(":shared:tests"))
+}

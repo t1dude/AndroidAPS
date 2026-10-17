@@ -30,9 +30,6 @@ import app.aaps.cgm.dexcomg7.protocol.G7Opcode
 import app.aaps.cgm.dexcomg7.protocol.TransmitterVersionMessage
 import app.aaps.cgm.dexcomg7.protocol.hexToBytesOrNull
 import app.aaps.cgm.dexcomg7.protocol.toHex
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -63,8 +60,7 @@ import java.text.DateFormat
  * All state here is touched only on [scope], which runs one piece of work at a time.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@SingleIn(AppScope::class)
-@Inject
+// One per app, built and scoped where it is bound: G7CoreBindings on the phone, WearG7Bindings on the watch
 class G7Session(
     private val context: Context,
     private val bluetooth: G7Bluetooth,

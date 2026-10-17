@@ -1,4 +1,4 @@
-package app.aaps.wear.medtrum
+package app.aaps.wear.engine.medtrum
 
 import android.Manifest
 import android.content.pm.PackageManager
@@ -30,7 +30,7 @@ import androidx.wear.compose.material3.Text
 import app.aaps.core.interfaces.di.injectMetroMembers
 import app.aaps.pump.medtrum.handover.HandoverTdd
 import app.aaps.pump.medtrum.handover.HandoverTemporaryBasal
-import app.aaps.wear.R
+import app.aaps.wear.engine.R
 import dev.zacsweers.metro.Inject
 import java.text.DateFormat
 import java.util.Date
@@ -73,7 +73,7 @@ class MedtrumWatchActivity : ComponentActivity() {
                                     Button(
                                         onClick = { askPermission.launch(arrayOf(Manifest.permission.BLUETOOTH_SCAN, Manifest.permission.BLUETOOTH_CONNECT)) },
                                         modifier = Modifier.fillMaxWidth()
-                                    ) { Text(stringResource(R.string.g7_watch_allow)) }
+                                    ) { Text(stringResource(R.string.medtrum_watch_allow_bluetooth)) }
                                 }
                             }
                             item {

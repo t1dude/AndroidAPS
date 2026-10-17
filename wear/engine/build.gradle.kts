@@ -21,9 +21,38 @@ val generateEngineStringOwners = tasks.register<GenerateStringOwnerRegistryTask>
     outputDir.set(layout.buildDirectory.dir("generated/stringOwners"))
 }
 
+/**
+ * Files the engine's plugins read from the app's assets, taken from the phone app so they never drift apart:
+ * the version checker's `definition.json` (without it the loop's constraints throw and the algorithm gives no
+ * result - found on the watch) and the signature verifier's `revoked_certs.txt`. Not the phone's
+ * `logback.xml`: that would change how the watch app logs.
+ */
+abstract class CopyPhoneAssetsTask : DefaultTask() {
+
+    @get:InputFiles
+    abstract val sources: ConfigurableFileCollection
+
+    @get:OutputDirectory
+    abstract val outputDir: DirectoryProperty
+
+    @TaskAction
+    fun copy() {
+        val out = outputDir.get().asFile
+        out.deleteRecursively()
+        out.mkdirs()
+        sources.files.forEach { it.copyTo(File(out, it.name), overwrite = true) }
+    }
+}
+
+val copyPhoneAssets = tasks.register<CopyPhoneAssetsTask>("copyPhoneAssets") {
+    sources.from(rootProject.file("app/src/main/assets/definition.json"), rootProject.file("app/src/main/assets/revoked_certs.txt"))
+    outputDir.set(layout.buildDirectory.dir("generated/phoneAssets"))
+}
+
 androidComponents {
     onVariants { variant ->
         variant.sources.kotlin?.addGeneratedSourceDirectory(generateEngineStringOwners, GenerateStringOwnerRegistryTask::outputDir)
+        variant.sources.assets?.addGeneratedSourceDirectory(copyPhoneAssets, CopyPhoneAssetsTask::outputDir)
     }
 }
 

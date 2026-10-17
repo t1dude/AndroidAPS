@@ -166,6 +166,7 @@
     <string name="handover_test_write_failed">The session file could not be written. The patch stays on this phone.</string>
     <string name="handover_test_moved_out" comment="%1$s=file name, for example exports/Medtrum_session_2026-10-16_220000.txt">Moved out to %1$s. Copy this file to the other phone\'s AAPS exports folder and take it in there.</string>
     <string name="handover_test_moved_to_watch" comment="%1$s=file name, for example exports/Medtrum_session_2026-10-16_220000.txt">Sent to the watch. Open Medtrum test on the watch to read the patch status. A copy is in %1$s.</string>
+    <string name="handover_test_no_snapshot">The snapshot for the watch (settings and history) could not be written. The session went to the watch alone. See the log.</string>
     <string name="handover_test_from_watch">The watch handed the Medtrum patch session back. Open the Medtrum page and tap Take patch session in.</string>
     <string name="handover_test_sent_with_tbr" comment="%1$d=number of days, %2$s=temp basal rate, for example 0.00 U/h or 120%, %3$s=time it ends, for example 18:00">Sent along: the total daily dose of %1$d days, and the running temp basal (%2$s until %3$s).</string>
     <string name="handover_test_sent_no_tbr" comment="%1$d=number of days">Sent along: the total daily dose of %1$d days. No temp basal is running.</string>

@@ -1,6 +1,7 @@
 package app.aaps.wear.engine.di
 
 import android.content.Context
+import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.configuration.ConfigBuilder
@@ -11,11 +12,14 @@ import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.di.NotNSClient
 import app.aaps.core.interfaces.di.PumpDriver
 import app.aaps.core.interfaces.logging.AAPSLogger
+import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.plugin.PluginBase
+import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.di.CoreObjectsGraph
 import app.aaps.database.di.DatabaseConfig
+import app.aaps.implementation.maintenance.PreferenceImportApplier
 import app.aaps.implementation.plugin.PluginStore
 import app.aaps.implementation.resources.ResourceHelperImpl
 import app.aaps.implementation.utils.fabric.FabricPrivacyImpl
@@ -26,6 +30,7 @@ import app.aaps.plugins.sync.smsCommunicator.SmsCommunicatorPlugin
 import app.aaps.ui.compose.history.HistoryViewModel
 import app.aaps.wear.engine.CompanionLink
 import app.aaps.wear.engine.EngineBuildInfo
+import app.aaps.wear.engine.EngineReporter
 import app.aaps.wear.engine.medtrum.MedtrumWatchLink
 import app.aaps.wear.engine.source.WatchG7SourcePlugin
 import dev.zacsweers.metro.AppScope
@@ -84,6 +89,13 @@ interface EngineGraph : MetroViewModelMultibindings {
     // What `WatchEngine.start` runs, as `MainApp` does on the phone
     val resourceHelperImpl: ResourceHelperImpl
     val runningModeReconciler: RunningModeReconciler
+
+    // What a handover snapshot needs at the start
+    val preferenceImportApplier: PreferenceImportApplier
+    val profileFunction: ProfileFunction
+    val loop: Loop
+    val activePlugin: ActivePlugin
+    val engineReporter: EngineReporter
 
     @ApplicationScope val appScope: CoroutineScope
 

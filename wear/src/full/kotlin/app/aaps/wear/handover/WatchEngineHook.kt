@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import java.io.File
 
 /**
  * The full watch app's hook to the AAPS engine (`:wear:engine`). The other flavours have no engine and get
@@ -43,6 +44,9 @@ object WatchEngineHook {
     }
 
     fun injectMembers(target: Any): Boolean = WatchEngine.injectMembers(target)
+
+    /** The handover snapshot from the phone: the engine starts from it. */
+    fun onSnapshot(file: File) = WatchEngine.onSnapshot(file)
 
     /** New readings from the watch's own G7, for the engine while it runs. */
     fun onGlucose(readings: List<GV>) = WatchEngine.onGlucose(readings)

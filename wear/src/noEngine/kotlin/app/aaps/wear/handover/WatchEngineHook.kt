@@ -5,6 +5,7 @@ import android.content.Intent
 import app.aaps.core.data.model.GV
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.bus.RxBus
+import java.io.File
 
 /** No AAPS engine in this flavour: only the full watch app has one (see src/full). */
 object WatchEngineHook {
@@ -17,6 +18,11 @@ object WatchEngineHook {
 
     @Suppress("UNUSED_PARAMETER")
     fun onGlucose(readings: List<GV>) = Unit
+
+    /** No engine to take it: the file is dropped. */
+    fun onSnapshot(file: File) {
+        file.delete()
+    }
 
     fun hasSession(): Boolean = false
 

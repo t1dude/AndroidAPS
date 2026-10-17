@@ -32,6 +32,13 @@ data class MedtrumSession(val exportedAt: Long, val values: Map<String, String>)
     /** The patch serial, 0 when the session holds no patch. */
     val serial: Long get() = values[MedtrumStringNonKey.SnInput.key]?.toLongOrNull(radix = 16) ?: 0L
 
+    /** Daily doses, temporary basal and basal status that travel with the session. */
+    val extras: HandoverExtras get() = HandoverExtras.from(values)
+
+    /** The same session with [extras] in place of the ones it had. */
+    fun withExtras(extras: HandoverExtras): MedtrumSession =
+        copy(values = values.filterKeys { !it.startsWith(HandoverExtras.PREFIX) } + extras.toValues())
+
     fun toText(): String = buildString {
         append(HEADER).append('\t').append(exportedAt).append('\n')
         values.toSortedMap().forEach { (key, value) -> append(key).append('\t').append(escape(value)).append('\n') }

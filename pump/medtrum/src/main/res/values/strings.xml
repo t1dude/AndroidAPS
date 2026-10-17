@@ -167,6 +167,12 @@
     <string name="handover_test_moved_out" comment="%1$s=file name, for example exports/Medtrum_session_2026-10-16_220000.txt">Moved out to %1$s. Copy this file to the other phone\'s AAPS exports folder and take it in there.</string>
     <string name="handover_test_moved_to_watch" comment="%1$s=file name, for example exports/Medtrum_session_2026-10-16_220000.txt">Sent to the watch. Open Medtrum test on the watch to read the patch status. A copy is in %1$s.</string>
     <string name="handover_test_from_watch">The watch handed the Medtrum patch session back. Open the Medtrum page and tap Take patch session in.</string>
+    <string name="handover_test_sent_with_tbr" comment="%1$d=number of days, %2$s=temp basal rate, for example 0.00 U/h or 120%, %3$s=time it ends, for example 18:00">Sent along: the total daily dose of %1$d days, and the running temp basal (%2$s until %3$s).</string>
+    <string name="handover_test_sent_no_tbr" comment="%1$d=number of days">Sent along: the total daily dose of %1$d days. No temp basal is running.</string>
+    <string name="handover_test_rate_absolute" comment="%1$.2f=basal rate in units per hour">%1$.2f U/h</string>
+    <string name="handover_test_rate_percent" comment="%1$d=percent of the profile basal">%1$d%%</string>
+    <string name="handover_test_basal_applied" comment="%1$s=time of the read, for example 16:28">The basal the patch had at the other device\'s last read (%1$s) is now in this phone\'s treatments.</string>
+    <string name="handover_test_tdd_recalculated" comment="%1$s=date">The total daily doses from %1$s on will be calculated again.</string>
     <string name="handover_test_has_own_patch">This phone still has its own patch session. Move it out first, or unpair.</string>
     <string name="handover_test_no_file">No patch session file in the AAPS exports folder (a file starting with Medtrum_session_).</string>
     <string name="handover_test_bad_file" comment="%1$s=file name">%1$s is not a patch session file.</string>

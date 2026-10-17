@@ -60,7 +60,8 @@ class HandoverSnapshotWriterImpl(
             val manifest = mapOf(
                 HandoverSnapshot.KEY_DATABASE_VERSION to database.version.toString(),
                 HandoverSnapshot.KEY_BUILD_VERSION to config.BUILD_VERSION,
-                HandoverSnapshot.KEY_CREATED_AT to now.toString()
+                HandoverSnapshot.KEY_CREATED_AT to now.toString(),
+                HandoverSnapshot.KEY_ENGINEERING_MODE to config.isEngineeringMode().toString()
             )
             ZipOutputStream(target.outputStream().buffered()).use { zip ->
                 zip.putText(HandoverSnapshot.MANIFEST, HandoverSnapshot.encodeLines(manifest))

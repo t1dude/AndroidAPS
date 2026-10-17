@@ -11,6 +11,7 @@ import androidx.compose.material.icons.filled.Upload
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.aaps.core.data.model.RM
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
@@ -71,6 +72,9 @@ sealed class MedtrumOverviewEvent {
     data object ConfirmUnpair : MedtrumOverviewEvent()
     data object ConfirmMoveSessionOut : MedtrumOverviewEvent()
     data object ConfirmTakeSessionIn : MedtrumOverviewEvent()
+
+    /** After a session move: [message], then the question whether to turn the loop back on as [mode]. */
+    data class OfferRestoreMode(val title: String, val message: String, val mode: RM.Mode, val modeName: String) : MedtrumOverviewEvent()
 }
 
 // Registers itself: @ViewModelKey infers the key from the class. No graph entry, and deliberately
@@ -179,19 +183,27 @@ class MedtrumOverviewViewModel(
 
     /** Handover test: the patch session goes to a file, and this phone stops talking to the patch. */
     fun performMoveSessionOut() {
-        scope.launch {
-            val message = sessionTransfer.moveOut()
-            _events.tryEmit(MedtrumOverviewEvent.ShowDialog(rh.gs(R.string.handover_test_move_out), message))
-        }
+        scope.launch { show(rh.gs(R.string.handover_test_move_out), sessionTransfer.moveOut()) }
     }
 
     /** Handover test: the newest patch session file is taken in, and this phone drives the patch. */
     fun performTakeSessionIn() {
-        scope.launch {
-            val message = sessionTransfer.takeIn()
-            _events.tryEmit(MedtrumOverviewEvent.ShowDialog(rh.gs(R.string.handover_test_take_in), message))
-        }
+        scope.launch { show(rh.gs(R.string.handover_test_take_in), sessionTransfer.takeIn()) }
     }
+
+    private fun show(title: String, result: MedtrumSessionTransfer.Result) {
+        val mode = result.modeToRestore
+        _events.tryEmit(
+            if (mode != null) MedtrumOverviewEvent.OfferRestoreMode(title, result.message, mode, sessionTransfer.modeName(mode))
+            else MedtrumOverviewEvent.ShowDialog(title, result.message)
+        )
+    }
+
+    fun restoreMode(mode: RM.Mode) {
+        scope.launch { sessionTransfer.restoreMode(mode) }
+    }
+
+    fun keepLoopOff() = sessionTransfer.forgetRememberedMode()
 
     fun performUnpair() {
         aapsLogger.debug(LTag.PUMP, "performUnpair")

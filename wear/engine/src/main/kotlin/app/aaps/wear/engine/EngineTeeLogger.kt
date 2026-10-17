@@ -44,12 +44,12 @@ class EngineTeeLogger(private val delegate: AAPSLogger, private val context: Con
 
     override fun warn(tag: LTag, message: String) {
         delegate.warn(tag, message)
-        copy("W", tag, message)
+        if (tag !in NOT_COPIED) copy("W", tag, message)
     }
 
     override fun warn(tag: LTag, format: String, vararg arguments: Any?) {
         delegate.warn(tag, format, *arguments)
-        copy("W", tag, format(format, arguments))
+        if (tag !in NOT_COPIED) copy("W", tag, format(format, arguments))
     }
 
     override fun error(tag: LTag, message: String) {
@@ -93,5 +93,8 @@ class EngineTeeLogger(private val delegate: AAPSLogger, private val context: Con
 
         const val MAX_LINE = 400
         val FOLLOWED = setOf(LTag.APS, LTag.WORKER)
+
+        /** Warnings that are not: the Kalman smoothing writes one per glucose value, and filled the test log. */
+        val NOT_COPIED = setOf(LTag.GLUCOSE)
     }
 }

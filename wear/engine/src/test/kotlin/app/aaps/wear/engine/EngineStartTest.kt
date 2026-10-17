@@ -65,6 +65,20 @@ class EngineStartTest {
         assertThat(WorkManager.getInstance(RuntimeEnvironment.getApplication()).getWorkInfosForUniqueWork("KeepAlive").get()).isNotEmpty()
     }
 
+    /**
+     * Files the engine's plugins read from the assets. Found on the watch: without `definition.json` the
+     * version checker threw inside the loop's constraints, and the algorithm never gave a result.
+     */
+    @Test
+    fun theAssetsThePluginsReadAreThere() {
+        val assets = RuntimeEnvironment.getApplication().assets
+        listOf("definition.json", "revoked_certs.txt").forEach { name ->
+            assertThat(assets.open(name).use { it.readBytes() }).isNotEmpty()
+        }
+        // The phone's log setup must not change how the watch app logs
+        assertThat(assets.list("").orEmpty().toList()).doesNotContain("logback.xml")
+    }
+
     /** Engineering mode is the phone's, as the last snapshot brought it: the watch has no AAPS folder for the file. */
     @Test
     fun engineeringModeFollowsThePhone() {

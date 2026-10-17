@@ -72,5 +72,6 @@ dependencies {
     // The engine's start runs on a real graph in Robolectric (EngineStartTest). A JUnit4 runner, bridged onto
     // the JUnit Platform by the vintage engine, as in :wear.
     testImplementation(libs.org.robolectric)
+    testImplementation(libs.androidx.work.testing)
     testRuntimeOnly(libs.org.junit.vintage.engine)
 }

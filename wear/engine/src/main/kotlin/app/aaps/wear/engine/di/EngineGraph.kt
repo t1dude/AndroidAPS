@@ -1,6 +1,7 @@
 package app.aaps.wear.engine.di
 
 import android.content.Context
+import androidx.work.ListenableWorker
 import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck
 import app.aaps.core.interfaces.configuration.Config
@@ -18,11 +19,17 @@ import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.di.CoreObjectsGraph
+import app.aaps.core.objects.workflow.MetroWorkerCreator
+import app.aaps.core.objects.workflow.WorkerKey
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.implementation.maintenance.PreferenceImportApplier
 import app.aaps.implementation.plugin.PluginStore
+import app.aaps.implementation.receivers.KeepAliveWorker
 import app.aaps.implementation.resources.ResourceHelperImpl
+import app.aaps.implementation.scenes.SceneExpiryWorker
 import app.aaps.implementation.utils.fabric.FabricPrivacyImpl
+import app.aaps.plugins.aps.loop.runningMode.RunningModeExpiryScheduler
+import app.aaps.plugins.aps.loop.runningMode.RunningModeExpiryWorker
 import app.aaps.plugins.aps.loop.runningMode.RunningModeReconciler
 import app.aaps.plugins.constraints.bgQualityCheck.BgQualityCheckPlugin
 import app.aaps.plugins.constraints.objectives.objectives.Objective
@@ -36,6 +43,7 @@ import app.aaps.wear.engine.source.WatchG7SourcePlugin
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Includes
+import dev.zacsweers.metro.IntoMap
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.Multibinds
 import dev.zacsweers.metro.Provides
@@ -96,6 +104,30 @@ interface EngineGraph : MetroViewModelMultibindings {
     val loop: Loop
     val activePlugin: ActivePlugin
     val engineReporter: EngineReporter
+    val context: Context
+
+    /**
+     * The phone's workers the engine runs, as `AppWorkersGraph` lists them on the phone. The keep alive is
+     * the one that matters most: it gives the pump the running profile (without it the loop finds no basal
+     * on the pump and stops), reads the pump status and raises the pump unreachable alarm.
+     */
+    val workerCreators: Map<KClass<out ListenableWorker>, MetroWorkerCreator>
+    val runningModeExpiryScheduler: RunningModeExpiryScheduler
+
+    @Provides
+    @IntoMap
+    @WorkerKey(KeepAliveWorker::class)
+    fun bindKeepAliveWorker(factory: KeepAliveWorker.Factory): MetroWorkerCreator = factory
+
+    @Provides
+    @IntoMap
+    @WorkerKey(RunningModeExpiryWorker::class)
+    fun bindRunningModeExpiryWorker(factory: RunningModeExpiryWorker.Factory): MetroWorkerCreator = factory
+
+    @Provides
+    @IntoMap
+    @WorkerKey(SceneExpiryWorker::class)
+    fun bindSceneExpiryWorker(factory: SceneExpiryWorker.Factory): MetroWorkerCreator = factory
 
     @ApplicationScope val appScope: CoroutineScope
 

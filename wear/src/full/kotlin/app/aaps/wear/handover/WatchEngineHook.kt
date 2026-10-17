@@ -2,6 +2,7 @@ package app.aaps.wear.handover
 
 import android.content.Context
 import android.content.Intent
+import androidx.work.WorkerFactory
 import app.aaps.core.data.model.GV
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.bus.RxBus
@@ -10,6 +11,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.BuildConfig
 import app.aaps.wear.engine.CompanionLink
 import app.aaps.wear.engine.EngineBuildInfo
+import app.aaps.wear.engine.EngineWorkerFactory
 import app.aaps.wear.engine.R
 import app.aaps.wear.engine.WatchEngine
 import kotlinx.coroutines.CoroutineScope
@@ -44,6 +46,9 @@ object WatchEngineHook {
     }
 
     fun injectMembers(target: Any): Boolean = WatchEngine.injectMembers(target)
+
+    /** Builds the engine's workers; WorkManager builds its own internal ones itself. */
+    fun workerFactory(): WorkerFactory = EngineWorkerFactory()
 
     /** The handover snapshot from the phone: the engine starts from it. */
     fun onSnapshot(file: File) = WatchEngine.onSnapshot(file)

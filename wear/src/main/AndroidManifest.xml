@@ -127,6 +127,19 @@
             </intent-filter>
         </service>
 
+        <!-- WorkManager is configured by WearApp (Configuration.Provider), so its default initializer goes,
+             as in the phone app. Only the AAPS engine uses WorkManager on the watch. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <service
             android:name=".comm.DataLayerListenerServiceWear"
             android:exported="true">

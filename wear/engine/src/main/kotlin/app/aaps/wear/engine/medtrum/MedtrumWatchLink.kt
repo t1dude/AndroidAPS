@@ -295,8 +295,8 @@ class MedtrumWatchLink(
         }
         followBasal()
         log(
-            "Read ok in ${seconds(started)} s: ${medtrumPump.pumpState}, reservoir ${medtrumPump.reservoir} U, battery ${medtrumPump.batteryVoltage_B} V, " +
-                "basal ${medtrumPump.lastBasalRate} U/h ${medtrumPump.lastBasalType}, patch clock off by ${clockOffSeconds()} s, " +
+            "Read ok in ${seconds(started)} s: ${medtrumPump.pumpState}, reservoir ${num(medtrumPump.reservoir)} U, battery ${num(medtrumPump.batteryVoltage_B)} V, " +
+                "basal ${num(medtrumPump.lastBasalRate)} U/h ${medtrumPump.lastBasalType}, patch clock off by ${clockOffSeconds()} s, " +
                 "history ${medtrumPump.syncedSequenceNumber}/${medtrumPump.currentSequenceNumber}"
         )
         return true
@@ -314,7 +314,7 @@ class MedtrumWatchLink(
             status.type.isTempBasal() && known != null && abs(known.timestamp - status.startTime) < SAME_BASAL_MS -> known
 
             status.type.isTempBasal()                                                                              -> {
-                log("The patch runs a temporary basal that did not come along: ${status.rate} U/h ${status.type} since ${time(status.startTime)}, duration not known")
+                log("The patch runs a temporary basal that did not come along: ${num(status.rate)} U/h ${status.type} since ${time(status.startTime)}, duration not known")
                 null
             }
 
@@ -330,7 +330,7 @@ class MedtrumWatchLink(
 
     private fun describe(tbr: HandoverTemporaryBasal?): String =
         if (tbr == null) "none"
-        else "${tbr.rate}${if (tbr.isAbsolute) " U/h" else " %"} for ${tbr.duration / 60_000} min from ${time(tbr.timestamp)} (ends ${time(tbr.end)})"
+        else "${num(tbr.rate)}${if (tbr.isAbsolute) " U/h" else " %"} for ${tbr.duration / 60_000} min from ${time(tbr.timestamp)} (ends ${time(tbr.end)})"
 
     private fun saveExtras(extras: HandoverExtras) {
         state.edit().putString(KEY_EXTRAS, MedtrumSession(0L, extras.toValues()).toText()).apply()
@@ -471,6 +471,9 @@ class MedtrumWatchLink(
     private fun logForPhone(): String = synchronized(logLock) {
         runCatching { if (logFile.exists()) logFile.readText().takeLast(PHONE_LOG_CHARS) else "" }.getOrDefault("")
     }
+
+    /** Two decimals in the log: "0.35", not "0.35000000000000003". */
+    private fun num(value: Double): String = "%.2f".format(Locale.US, value)
 
     private fun time(at: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(at))
 

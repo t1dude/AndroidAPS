@@ -95,6 +95,12 @@ So the transfer must be:
   "import pump session". Move a running session to the second phone, **status reads only**, move it
   back. Order: Medtrum (in use, simple session), Dash, Omnipod 5 (Keystore data). A pod or patch near
   its end. Answers: does the pump accept a second device continuing its session?
+- **T1 result, Medtrum (2026-10-17)**: passed phone to phone and phone to watch. The watch read the
+  patch every 5 minutes for 30 minutes with the screen off (alarm-woken reads, 3-4 s each, 7 of 8 good,
+  one refused connect; reads now retry once). The history position (284/284) came back unchanged.
+  The session now also carries the 7 daily doses, the running temp basal with its duration, and the
+  patch's last basal status; the phone applies the basal through the driver's own update at take in and
+  recalculates its daily doses from the day the session left.
 - **T2: the engine on the Ultra 2** with a virtual pump: battery over a day, the Samsung freezer
   (battery exemption, see the G7 work), a steady 5-minute cycle overnight.
 
@@ -120,7 +126,10 @@ Handover, phone to watch:
 2. Phone stops its loop and closes the pump connection.
 3. Snapshot to the watch: pump session (O5 Keystore data re-wrapped), profile and settings, the cached
    TDD rows of the last 7 days plus the raw records for 24 h + DIA (see "Total daily dose"), BG of the
-   last 24 h, temp target, running mode.
+   last 24 h, temp target, running mode, and **the running temp basal with its duration** (user,
+   2026-10-17). A pump that reports a running temp basal does not always report how long it runs
+   (Medtrum does not), so without it the receiving device does not know when it ends. Seen in the watch
+   test: a 120 min zero temp ran on through the whole handover.
 4. Watch imports, does **one status read**, confirms.
 5. Only then the phone switches to "controlled by the watch". Any failure before that: cancelled,
    the phone still owns the pump.

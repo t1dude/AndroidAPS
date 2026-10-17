@@ -26,6 +26,8 @@ import app.aaps.pump.medtrum.comm.packets.MedtrumPacket
 import app.aaps.pump.medtrum.comm.packets.NotificationPacket
 import app.aaps.pump.medtrum.comm.packets.SubscribePacket
 import app.aaps.pump.medtrum.comm.packets.SynchronizePacket
+import app.aaps.pump.medtrum.handover.HandoverExtras
+import app.aaps.pump.medtrum.handover.HandoverTemporaryBasal
 import app.aaps.pump.medtrum.handover.MedtrumSession
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
@@ -38,6 +40,7 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +53,7 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
 import kotlin.math.roundToLong
 
 /**
@@ -92,7 +96,9 @@ class MedtrumWatchLink(
         /** What the last good read found, ready to show. */
         val result: String? = null,
         /** The newest lines of the test log, for the screen. */
-        val log: List<String> = emptyList()
+        val log: List<String> = emptyList(),
+        /** Daily doses and temporary basal that came with the session, the basal kept up to date by the reads. */
+        val extras: HandoverExtras = HandoverExtras()
     ) {
 
         val hasSession: Boolean get() = serial != 0L
@@ -125,7 +131,7 @@ class MedtrumWatchLink(
         if (started) return
         started = true
         medtrumPump.loadVarsFromSP()
-        _status.update { it.copy(serial = currentSerial(), log = tailLines()) }
+        _status.update { it.copy(serial = currentSerial(), log = tailLines(), extras = savedExtras()) }
         scope.launch { rxBus.toFlow(EventData.MedtrumSessionToWatch::class).collect { takeIn(it.session) } }
         // The app was restarted while reading every 5 minutes: go on
         if (state.getBoolean(KEY_AUTO_READ, false) && _status.value.hasSession) {
@@ -198,7 +204,8 @@ class MedtrumWatchLink(
                 if (!_status.value.hasSession) return@withLock
                 // Stop first: the session must not move on after it is sent
                 preferences.put(MedtrumBooleanNonKey.SessionMovedAway, true)
-                val session = MedtrumSession.read(preferences, System.currentTimeMillis())
+                // The daily doses go back as they came; the temporary basal and basal status as the last read saw them
+                val session = MedtrumSession.read(preferences, System.currentTimeMillis()).withExtras(_status.value.extras)
                 _status.update { it.copy(serial = 0L, result = null, lastReadOk = null) }
                 log("Session of patch ${session.serial.toString(16)} handed back to the phone")
                 rxBus.send(EventWearToMobile(EventData.MedtrumSessionToPhone(session.toText(), logForPhone())))
@@ -215,8 +222,11 @@ class MedtrumWatchLink(
         session.writeTo(preferences)
         preferences.put(MedtrumBooleanNonKey.SessionMovedAway, false)
         medtrumPump.loadVarsFromSP()
-        _status.update { it.copy(serial = currentSerial(), lastReadAt = null, lastReadOk = null, result = null) }
+        val extras = session.extras
+        saveExtras(extras)
+        _status.update { it.copy(serial = currentSerial(), lastReadAt = null, lastReadOk = null, result = null, extras = extras) }
         log("----- Took in the session of patch ${session.serial.toString(16)}, exported ${time(session.exportedAt)}")
+        log("Came along: ${extras.tdds.size} daily doses ${extras.tdds.map { "%.1f".format(Locale.US, it.totalAmount) }}, temporary basal ${describe(extras.temporaryBasal)}")
         log(
             "Watch ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), AAPS ${BuildConfig.BUILDVERSION}, " +
                 "battery unrestricted: ${isBatteryUnrestricted()}"
@@ -254,17 +264,13 @@ class MedtrumWatchLink(
         val started = System.currentTimeMillis()
         log("Read ($reason): connecting to patch ${serial.toString(16)}")
         transport.setMedtrumCallback(this)
-        val link = CompletableDeferred<Boolean>()
-        connected = link
-        if (!transport.connect("Medtrum watch test", serial)) {
-            log("Connect refused: Bluetooth off or not allowed")
-            return false
+        if (!connect(serial, started)) {
+            // A single failed connect happens now and then (seen once in 8 reads). Once more before giving up.
+            transport.disconnect("Medtrum watch test: retry")
+            log("Trying once more in ${CONNECT_RETRY_DELAY_MS / 1000} s")
+            delay(CONNECT_RETRY_DELAY_MS)
+            if (!connect(serial, System.currentTimeMillis())) return false
         }
-        if (withTimeoutOrNull(CONNECT_TIMEOUT_MS) { link.await() } != true) {
-            log("No connection to the patch after ${seconds(started)} s")
-            return false
-        }
-        log("Connected after ${seconds(started)} s")
         val steps = listOf(
             "authorize" to AuthorizePacket(injector),
             "device type" to GetDeviceTypePacket(injector),
@@ -280,11 +286,64 @@ class MedtrumWatchLink(
             }
             log("Step $name ok in ${System.currentTimeMillis() - stepStarted} ms")
         }
+        followBasal()
         log(
             "Read ok in ${seconds(started)} s: ${medtrumPump.pumpState}, reservoir ${medtrumPump.reservoir} U, battery ${medtrumPump.batteryVoltage_B} V, " +
                 "basal ${medtrumPump.lastBasalRate} U/h ${medtrumPump.lastBasalType}, patch clock off by ${clockOffSeconds()} s, " +
                 "history ${medtrumPump.syncedSequenceNumber}/${medtrumPump.currentSequenceNumber}"
         )
+        return true
+    }
+
+    /**
+     * Keeps the temporary basal that came along up to date with what the patch reports. The patch does
+     * not report a duration, so a temporary basal it runs is only kept when it is the one that came along.
+     */
+    private fun followBasal() {
+        val status = medtrumPump.basalStatus(readAt = System.currentTimeMillis()) ?: return
+        val extras = _status.value.extras
+        val known = extras.temporaryBasal
+        val temporaryBasal = when {
+            status.type.isTempBasal() && known != null && abs(known.timestamp - status.startTime) < SAME_BASAL_MS -> known
+
+            status.type.isTempBasal()                                                                              -> {
+                log("The patch runs a temporary basal that did not come along: ${status.rate} U/h ${status.type} since ${time(status.startTime)}, duration not known")
+                null
+            }
+
+            else                                                                                                   -> {
+                if (known != null) log("The temporary basal that came along has ended: the patch runs ${status.type} since ${time(status.startTime)}")
+                null
+            }
+        }
+        val updated = extras.copy(temporaryBasal = temporaryBasal, basalStatus = status)
+        saveExtras(updated)
+        _status.update { it.copy(extras = updated) }
+    }
+
+    private fun describe(tbr: HandoverTemporaryBasal?): String =
+        if (tbr == null) "none"
+        else "${tbr.rate}${if (tbr.isAbsolute) " U/h" else " %"} for ${tbr.duration / 60_000} min from ${time(tbr.timestamp)} (ends ${time(tbr.end)})"
+
+    private fun saveExtras(extras: HandoverExtras) {
+        state.edit().putString(KEY_EXTRAS, MedtrumSession(0L, extras.toValues()).toText()).apply()
+    }
+
+    private fun savedExtras(): HandoverExtras =
+        state.getString(KEY_EXTRAS, null)?.let { MedtrumSession.parse(it)?.extras } ?: HandoverExtras()
+
+    private suspend fun connect(serial: Long, started: Long): Boolean {
+        val link = CompletableDeferred<Boolean>()
+        connected = link
+        if (!transport.connect("Medtrum watch test", serial)) {
+            log("Connect refused: Bluetooth off or not allowed")
+            return false
+        }
+        if (withTimeoutOrNull(CONNECT_TIMEOUT_MS) { link.await() } != true) {
+            log("No connection to the patch after ${seconds(started)} s")
+            return false
+        }
+        log("Connected after ${seconds(started)} s")
         return true
     }
 
@@ -426,6 +485,7 @@ class MedtrumWatchLink(
         private const val AUTO_READ_MS = 5 * 60 * 1000L
         private const val LATE_MS = 30 * 1000L
         private const val CONNECT_TIMEOUT_MS = 60 * 1000L
+        private const val CONNECT_RETRY_DELAY_MS = 10 * 1000L
         private const val COMMAND_TIMEOUT_MS = 30 * 1000L
         private const val WAKE_LOCK_MS = 4 * 60 * 1000L
         private const val SCREEN_LINES = 40
@@ -438,6 +498,8 @@ class MedtrumWatchLink(
         private const val STATE_FILE = "medtrum_watch_test"
         private const val KEY_AUTO_READ = "auto_read"
         private const val KEY_NEXT_AT = "next_read_at"
+        private const val KEY_EXTRAS = "extras"
+        private const val SAME_BASAL_MS = 60 * 1000L
         private const val CHANNEL_ID = "AndroidAPS-MedtrumWatchTest"
 
         // Clear of the ids DataLayerListenerServiceWear (1, 2, 556677), CgmAlarmWear (7700..7955) and

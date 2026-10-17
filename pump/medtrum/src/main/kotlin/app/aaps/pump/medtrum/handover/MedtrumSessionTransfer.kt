@@ -2,20 +2,25 @@ package app.aaps.pump.medtrum.handover
 
 import android.content.Context
 import app.aaps.core.data.model.RM
+import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.aps.Loop
+import app.aaps.core.interfaces.db.PersistenceLayer
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
 import app.aaps.core.interfaces.notifications.NotificationId
 import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.profile.ProfileFunction
+import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.pump.TemporaryBasalStorage
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
 import app.aaps.core.interfaces.rx.weardata.EventData
+import app.aaps.core.interfaces.stats.TddCalculator
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.Translator
 import app.aaps.core.keys.interfaces.Preferences
@@ -39,6 +44,8 @@ import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlin.math.abs
+import kotlin.math.roundToInt
 
 /**
  * Handover test (phase 0): moves a running patch session to another phone and back, through a file
@@ -64,7 +71,11 @@ class MedtrumSessionTransfer(
     private val profileFunction: ProfileFunction,
     private val translator: Translator,
     private val rxBus: RxBus,
-    private val notificationManager: NotificationManager
+    private val notificationManager: NotificationManager,
+    private val tddCalculator: TddCalculator,
+    private val pumpSync: PumpSync,
+    private val temporaryBasalStorage: TemporaryBasalStorage,
+    private val persistenceLayer: PersistenceLayer
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -111,7 +122,8 @@ class MedtrumSessionTransfer(
         medtrumPump.takenInSerial = null
         medtrumPlugin.getService()?.disconnect("Handover test: session moved away")
         val loopNote = turnLoopOff()
-        val session = MedtrumSession.read(preferences, dateUtil.now())
+        val extras = collectExtras()
+        val session = MedtrumSession.read(preferences, dateUtil.now()).withExtras(extras)
         val name = MedtrumSession.FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + ".txt"
         val written = runCatching {
             val file = dir.createFile("text/plain", name) ?: error("could not create $name")
@@ -129,7 +141,7 @@ class MedtrumSessionTransfer(
             aapsLogger.info(LTag.PUMP, "Handover test: session sent to the watch")
         }
         val moved = if (toWatch) rh.gs(R.string.handover_test_moved_to_watch, "exports/$name") else rh.gs(R.string.handover_test_moved_out, "exports/$name")
-        Result(listOfNotNull(moved, loopNote).joinToString("\n\n"))
+        Result(listOfNotNull(moved, describeSent(extras), loopNote).joinToString("\n\n"))
     }
 
     /**
@@ -152,9 +164,11 @@ class MedtrumSessionTransfer(
         _movedAway.value = false
         medtrumPump.loadVarsFromSP()
         medtrumPump.loadUserSettingsFromSP()
+        val basalNote = applyExtras(session.extras)
         notificationManager.dismiss(NotificationId.PUMP_SESSION_FROM_WATCH)
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} taken in from ${file.name}, exported ${dateUtil.dateAndTimeString(session.exportedAt)}")
-        Result(rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt)), modeToRestore = rememberedMode())
+        val takenIn = rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt))
+        Result(listOfNotNull(takenIn, basalNote).joinToString("\n\n"), modeToRestore = rememberedMode())
     }
 
     /**
@@ -199,6 +213,75 @@ class MedtrumSessionTransfer(
             .onFailure { aapsLogger.error(LTag.PUMP, "Handover test: saving the watch log failed", it) }
     }
 
+    /**
+     * What goes along with the session: the total daily doses of the last 7 finished days, the running
+     * temporary basal with its duration, and the basal the patch reported at this phone's last read.
+     */
+    private suspend fun collectExtras(): HandoverExtras {
+        val tdds = tddCalculator.calculate(TDD_DAYS, allowMissingDays = true)
+            ?.let { days -> (0 until days.size()).map { days.valueAt(it) } }
+            ?.map { HandoverTdd(it.timestamp, it.basalAmount, it.bolusAmount, it.totalAmount, it.carbs) }
+            ?.sortedBy { it.timestamp }
+            .orEmpty()
+        val temporaryBasal = pumpSync.expectedPumpState().temporaryBasal
+            ?.let { HandoverTemporaryBasal(it.timestamp, it.duration, it.rate, it.isAbsolute, it.type.name, it.pumpId) }
+        val basalStatus = medtrumPump.basalStatus(readAt = medtrumPump.lastConnection)
+        aapsLogger.info(LTag.PUMP, "Handover test: sending ${tdds.size} daily doses, temporary basal $temporaryBasal, basal status $basalStatus")
+        return HandoverExtras(tdds = tdds, temporaryBasal = temporaryBasal, basalStatus = basalStatus, movedOutAt = dateUtil.now())
+    }
+
+    private fun describeSent(extras: HandoverExtras): String {
+        val tbr = extras.temporaryBasal
+        return if (tbr != null && tbr.end > dateUtil.now())
+            rh.gs(R.string.handover_test_sent_with_tbr, extras.tdds.size, rateText(tbr), dateUtil.timeString(tbr.end))
+        else rh.gs(R.string.handover_test_sent_no_tbr, extras.tdds.size)
+    }
+
+    private fun rateText(tbr: HandoverTemporaryBasal): String =
+        if (tbr.isAbsolute) rh.gs(R.string.handover_test_rate_absolute, tbr.rate) else rh.gs(R.string.handover_test_rate_percent, tbr.rate.roundToInt())
+
+    /**
+     * Brings this phone's records up to what the other device knew.
+     *
+     * The basal the patch reported at the other device's last read goes through the driver's own update,
+     * the same one a status read runs, so a temporary basal that started or ended there gets into the
+     * treatments now, before the loop runs again. It is keyed by its start on the patch, so the driver's
+     * next read of the same basal adds nothing twice. The patch does not report how long a temporary basal
+     * runs: the duration that came along is handed to the driver first.
+     *
+     * The daily doses from the day the session left are calculated again, from the complete records.
+     */
+    private suspend fun applyExtras(extras: HandoverExtras): String? {
+        val notes = mutableListOf<String>()
+        extras.basalStatus?.let { status ->
+            val expected = pumpSync.expectedPumpState().temporaryBasal
+            val tbr = extras.temporaryBasal
+            if (status.type.isTempBasal() && expected?.pumpId != status.startTime && tbr != null && abs(tbr.timestamp - status.startTime) < T.mins(1).msecs()) {
+                temporaryBasalStorage.add(
+                    PumpSync.PumpState.TemporaryBasal(
+                        timestamp = status.startTime,
+                        duration = tbr.duration,
+                        rate = status.rate,
+                        isAbsolute = tbr.isAbsolute,
+                        type = PumpSync.TemporaryBasalType.entries.firstOrNull { it.name == tbr.type } ?: PumpSync.TemporaryBasalType.NORMAL,
+                        id = 0L,
+                        pumpId = status.startTime
+                    )
+                )
+            }
+            medtrumPump.handleBasalStatusUpdate(status.type, status.rate, status.sequence, status.patchId, status.startTime, status.readAt)
+            aapsLogger.info(LTag.PUMP, "Handover test: basal status from the other device applied: $status")
+            notes += rh.gs(R.string.handover_test_basal_applied, dateUtil.timeString(status.readAt))
+        }
+        extras.movedOutAt?.let { movedOutAt ->
+            val from = dateUtil.beginOfDay(movedOutAt)
+            persistenceLayer.clearCachedTddData(from)
+            aapsLogger.info(LTag.PUMP, "Handover test: cached daily doses from ${dateUtil.dateString(from)} cleared")
+            notes += rh.gs(R.string.handover_test_tdd_recalculated, dateUtil.dateString(from))
+        }
+        return notes.takeIf { it.isNotEmpty() }?.joinToString("\n")
+    }
+
     /** The mode this phone had before it moved its session out, if any. */
     fun rememberedMode(): RM.Mode? =
         preferences.get(MedtrumStringNonKey.ModeBeforeMoveOut).takeIf { it.isNotEmpty() }?.let { name -> RM.Mode.entries.firstOrNull { it.name == name } }
@@ -238,5 +321,8 @@ class MedtrumSessionTransfer(
     companion object {
 
         const val WATCH_LOG_PREFIX = "Medtrum_watch_log_"
+
+        /** Dynamic ISF needs the total daily dose of the last 7 days. */
+        private const val TDD_DAYS = 7L
     }
 }

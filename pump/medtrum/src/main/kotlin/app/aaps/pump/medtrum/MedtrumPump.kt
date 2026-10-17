@@ -23,6 +23,7 @@ import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
 import app.aaps.pump.medtrum.comm.enums.ModelType
 import app.aaps.pump.medtrum.extension.toByteArray
 import app.aaps.pump.medtrum.extension.toInt
+import app.aaps.pump.medtrum.handover.MedtrumBasalStatus
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumDoubleNonKey
@@ -590,6 +591,14 @@ class MedtrumPump(
         _lastBasalStartTime = basalStartTime
         _lastBasalDuration = durationInMin
     }
+
+    /**
+     * The basal the patch reported last, for a handover (see `MedtrumSessionTransfer`). Null before the first
+     * status read since the app started.
+     */
+    fun basalStatus(readAt: Long): MedtrumBasalStatus? =
+        if (lastBasalStartTime == 0L) null
+        else MedtrumBasalStatus(lastBasalType, lastBasalRate, lastBasalSequence, lastBasalPatchId, lastBasalStartTime, readAt)
 
     fun handleStopStatusUpdate(stopSequence: Int, stopPatchId: Long) {
         aapsLogger.debug(LTag.PUMP, "handleStopStatusUpdate: stopSequence: $stopSequence stopPatchId: $stopPatchId")

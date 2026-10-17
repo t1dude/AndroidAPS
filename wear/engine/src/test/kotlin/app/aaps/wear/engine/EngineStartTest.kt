@@ -50,4 +50,26 @@ class EngineStartTest {
         assertThat(graph.pluginStore.plugins.map { it::class }).containsNoneIn(EnginePlugins.leftOut)
         assertThat(graph.config.appInitialized).isTrue()
     }
+
+    /**
+     * With the phone's settings, as a handover snapshot brings them. Found on the watch: the import reads the
+     * plugin list to find each setting's key, and the settings were applied before the list existed.
+     */
+    @Test
+    fun theEngineStartsWithThePhonesSettings() = runBlocking {
+        val graph = graph()
+        val settings = mapOf(
+            // A setting of a plugin the engine has, and a phone glucose source the watch does not run
+            "ConfigBuilder_Enabled_APS_OpenAPSSMBPlugin" to "true",
+            "ConfigBuilder_Enabled_BGSOURCE_DexcomPlugin" to "true",
+            "ConfigBuilder_Enabled_PUMP_MedtrumPlugin" to "true"
+        )
+
+        graph.startEngine(settings)
+
+        assertThat(graph.config.appInitialized).isTrue()
+        // The pump choice stays the engine's own, and the glucose source the watch's G7
+        assertThat(graph.activePlugin.activePump.selectedActivePump()).isInstanceOf(VirtualPumpPlugin::class.java)
+        assertThat(graph.activePlugin.activeBgSource).isInstanceOf(WatchG7SourcePlugin::class.java)
+    }
 }

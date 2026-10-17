@@ -1,6 +1,7 @@
 package app.aaps.pump.medtrum.handover
 
 import android.content.Context
+import androidx.annotation.VisibleForTesting
 import app.aaps.core.data.model.RM
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Action
@@ -272,7 +273,8 @@ class MedtrumSessionTransfer(
      *
      * The daily doses from the day the session left are calculated again, from the complete records.
      */
-    private suspend fun applyExtras(extras: HandoverExtras): String? {
+    @VisibleForTesting
+    internal suspend fun applyExtras(extras: HandoverExtras): String? {
         val notes = mutableListOf<String>()
         extras.basalStatus?.let { status ->
             val expected = pumpSync.expectedPumpState().temporaryBasal

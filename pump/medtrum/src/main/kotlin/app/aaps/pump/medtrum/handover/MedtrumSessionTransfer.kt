@@ -84,7 +84,13 @@ class MedtrumSessionTransfer(
     fun start() {
         if (started) return
         started = true
-        scope.launch { rxBus.toFlow(EventData.MedtrumSessionToPhone::class).collect { receiveFromWatch(it.session) } }
+        scope.launch {
+            rxBus.toFlow(EventData.MedtrumSessionToPhone::class).collect {
+                saveWatchLog(it.log)
+                receiveFromWatch(it.session)
+            }
+        }
+        scope.launch { rxBus.toFlow(EventData.MedtrumWatchLog::class).collect { saveWatchLog(it.log) } }
     }
 
     /**
@@ -178,6 +184,21 @@ class MedtrumSessionTransfer(
         notificationManager.post(NotificationId.PUMP_SESSION_FROM_WATCH, rh.gs(R.string.handover_test_from_watch))
     }
 
+    /** The watch's test log goes next to the session files, as Medtrum_watch_log_<date>.txt. */
+    private suspend fun saveWatchLog(log: String) = withContext(Dispatchers.IO) {
+        if (log.isBlank()) return@withContext
+        val dir = fileListProvider.ensureExportDirExists() ?: run {
+            aapsLogger.error(LTag.PUMP, "Handover test: no exports folder for the watch log")
+            return@withContext
+        }
+        val name = WATCH_LOG_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + ".txt"
+        runCatching {
+            val file = dir.createFile("text/plain", name) ?: error("could not create $name")
+            context.contentResolver.openOutputStream(file.uri)?.use { it.write(log.toByteArray()) } ?: error("could not write $name")
+        }.onSuccess { aapsLogger.info(LTag.PUMP, "Handover test: watch log saved as exports/$name") }
+            .onFailure { aapsLogger.error(LTag.PUMP, "Handover test: saving the watch log failed", it) }
+    }
+
     /** The mode this phone had before it moved its session out, if any. */
     fun rememberedMode(): RM.Mode? =
         preferences.get(MedtrumStringNonKey.ModeBeforeMoveOut).takeIf { it.isNotEmpty() }?.let { name -> RM.Mode.entries.firstOrNull { it.name == name } }
@@ -212,5 +233,10 @@ class MedtrumSessionTransfer(
         preferences.put(MedtrumStringNonKey.ModeBeforeMoveOut, mode.name)
         aapsLogger.info(LTag.PUMP, "Handover test: loop disabled, was $mode")
         return rh.gs(R.string.handover_test_loop_disabled, translator.translate(mode))
+    }
+
+    companion object {
+
+        const val WATCH_LOG_PREFIX = "Medtrum_watch_log_"
     }
 }

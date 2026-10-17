@@ -87,6 +87,13 @@ class MedtrumWatchActivity : ComponentActivity() {
                                 }
                             }
                         }
+                        if (status.log.isNotEmpty()) {
+                            item {
+                                Button(onClick = { link.sendLog() }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.medtrum_watch_send_log))
+                                }
+                            }
+                        }
                         items(status.log.reversed()) { line ->
                             Text(line, style = MaterialTheme.typography.bodySmall, modifier = Modifier.fillMaxWidth())
                         }

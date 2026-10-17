@@ -8,6 +8,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -71,6 +72,7 @@ sealed class MedtrumOverviewEvent {
     data class ShowDialog(val title: String, val message: String) : MedtrumOverviewEvent()
     data object ConfirmUnpair : MedtrumOverviewEvent()
     data object ConfirmMoveSessionOut : MedtrumOverviewEvent()
+    data object ConfirmMoveSessionToWatch : MedtrumOverviewEvent()
     data object ConfirmTakeSessionIn : MedtrumOverviewEvent()
 
     /** After a session move: [message], then the question whether to turn the loop back on as [mode]. */
@@ -177,6 +179,10 @@ class MedtrumOverviewViewModel(
         _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionOut)
     }
 
+    fun onMoveSessionToWatchClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionToWatch)
+    }
+
     fun onTakeSessionInClick() {
         _events.tryEmit(MedtrumOverviewEvent.ConfirmTakeSessionIn)
     }
@@ -184,6 +190,11 @@ class MedtrumOverviewViewModel(
     /** Handover test: the patch session goes to a file, and this phone stops talking to the patch. */
     fun performMoveSessionOut() {
         scope.launch { show(rh.gs(R.string.handover_test_move_out), sessionTransfer.moveOut()) }
+    }
+
+    /** Handover test: as [performMoveSessionOut], and the session is also sent to the watch. */
+    fun performMoveSessionToWatch() {
+        scope.launch { show(rh.gs(R.string.handover_test_move_to_watch), sessionTransfer.moveOut(toWatch = true)) }
     }
 
     /** Handover test: the newest patch session file is taken in, and this phone drives the patch. */
@@ -381,6 +392,14 @@ class MedtrumOverviewViewModel(
                         icon = Icons.Filled.Upload,
                         category = ActionCategory.MANAGEMENT,
                         onClick = { onMoveSessionOutClick() }
+                    )
+                )
+                add(
+                    PumpAction(
+                        label = rh.gs(R.string.handover_test_move_to_watch),
+                        icon = Icons.Filled.Watch,
+                        category = ActionCategory.MANAGEMENT,
+                        onClick = { onMoveSessionToWatchClick() }
                     )
                 )
             } else {

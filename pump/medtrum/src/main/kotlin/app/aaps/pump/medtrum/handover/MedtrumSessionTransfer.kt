@@ -8,9 +8,14 @@ import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
+import app.aaps.core.interfaces.notifications.NotificationId
+import app.aaps.core.interfaces.notifications.NotificationManager
 import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
+import app.aaps.core.interfaces.rx.bus.RxBus
+import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.Translator
 import app.aaps.core.keys.interfaces.Preferences
@@ -23,18 +28,21 @@ import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 /**
- * Handover test (phase 0, T1): moves a running patch session to another phone and back, through a file
- * in the AAPS exports folder. Only one device may talk to the patch, so the phone that moved its
+ * Handover test (phase 0): moves a running patch session to another phone and back, through a file
+ * in the AAPS exports folder, or to the watch and back, over the phone-watch link. Only one device may talk to the patch, so the phone that moved its
  * session away does not connect to the patch again until it takes a session back in.
  *
  * The file holds the patch serial and session token: anyone with it can talk to the patch. Delete it
@@ -54,8 +62,13 @@ class MedtrumSessionTransfer(
     private val medtrumPlugin: MedtrumPlugin,
     private val loop: Loop,
     private val profileFunction: ProfileFunction,
-    private val translator: Translator
+    private val translator: Translator,
+    private val rxBus: RxBus,
+    private val notificationManager: NotificationManager
 ) {
+
+    private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+    private var started = false
 
     /** What [moveOut] and [takeIn] report. [modeToRestore] is set when the loop can be turned back on. */
     data class Result(val message: String, val modeToRestore: RM.Mode? = null)
@@ -67,11 +80,20 @@ class MedtrumSessionTransfer(
 
     val isMovedAway: Boolean get() = _movedAway.value
 
+    /** Listens for the watch handing a session back. Called when the Medtrum plugin starts. */
+    fun start() {
+        if (started) return
+        started = true
+        scope.launch { rxBus.toFlow(EventData.MedtrumSessionToPhone::class).collect { receiveFromWatch(it.session) } }
+    }
+
     /**
      * Writes the session to a file and stops this phone talking to the patch. A running loop is turned
      * off (Disable loop), and the mode it had is kept, to offer it again when a session is taken back in.
+     * With [toWatch] the session is also sent to the watch. The file stays as a way back: if the watch
+     * never gets it, this phone can take it in again.
      */
-    suspend fun moveOut(): Result = withContext(Dispatchers.IO) {
+    suspend fun moveOut(toWatch: Boolean = false): Result = withContext(Dispatchers.IO) {
         if (medtrumPump.pumpSN == 0L) return@withContext Result(rh.gs(R.string.handover_test_no_patch))
         if (isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_already_moved))
         if (commandQueue.size() > 0 || commandQueue.performing() != null) return@withContext Result(rh.gs(R.string.handover_test_busy))
@@ -96,7 +118,12 @@ class MedtrumSessionTransfer(
             return@withContext Result(rh.gs(R.string.handover_test_write_failed), modeToRestore = rememberedMode())
         }
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to exports/$name")
-        Result(listOfNotNull(rh.gs(R.string.handover_test_moved_out, "exports/$name"), loopNote).joinToString("\n\n"))
+        if (toWatch) {
+            rxBus.send(EventMobileToWear(EventData.MedtrumSessionToWatch(session.toText())))
+            aapsLogger.info(LTag.PUMP, "Handover test: session sent to the watch")
+        }
+        val moved = if (toWatch) rh.gs(R.string.handover_test_moved_to_watch, "exports/$name") else rh.gs(R.string.handover_test_moved_out, "exports/$name")
+        Result(listOfNotNull(moved, loopNote).joinToString("\n\n"))
     }
 
     /**
@@ -119,8 +146,36 @@ class MedtrumSessionTransfer(
         _movedAway.value = false
         medtrumPump.loadVarsFromSP()
         medtrumPump.loadUserSettingsFromSP()
+        notificationManager.dismiss(NotificationId.PUMP_SESSION_FROM_WATCH)
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} taken in from ${file.name}, exported ${dateUtil.dateAndTimeString(session.exportedAt)}")
         Result(rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt)), modeToRestore = rememberedMode())
+    }
+
+    /**
+     * The watch handed the session back. It is saved as the newest session file, so "Take patch session
+     * in" picks it up; the user takes it in on the Medtrum page as with a file from another phone.
+     */
+    private suspend fun receiveFromWatch(text: String) = withContext(Dispatchers.IO) {
+        val session = MedtrumSession.parse(text)
+        if (session == null || session.serial == 0L) {
+            aapsLogger.error(LTag.PUMP, "Handover test: the watch sent a session that cannot be read")
+            return@withContext
+        }
+        val dir = fileListProvider.ensureExportDirExists() ?: run {
+            aapsLogger.error(LTag.PUMP, "Handover test: no exports folder for the session from the watch")
+            return@withContext
+        }
+        val name = MedtrumSession.FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + "_watch.txt"
+        val written = runCatching {
+            val file = dir.createFile("text/plain", name) ?: error("could not create $name")
+            context.contentResolver.openOutputStream(file.uri)?.use { it.write(text.toByteArray()) } ?: error("could not write $name")
+        }
+        written.exceptionOrNull()?.let {
+            aapsLogger.error(LTag.PUMP, "Handover test: saving the session from the watch failed", it)
+            return@withContext
+        }
+        aapsLogger.info(LTag.PUMP, "Handover test: the watch handed back the session of patch ${session.serial.toString(16)}, saved as exports/$name")
+        notificationManager.post(NotificationId.PUMP_SESSION_FROM_WATCH, rh.gs(R.string.handover_test_from_watch))
     }
 
     /** The mode this phone had before it moved its session out, if any. */

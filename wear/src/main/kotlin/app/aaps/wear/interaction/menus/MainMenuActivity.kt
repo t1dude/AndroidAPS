@@ -21,6 +21,8 @@ import app.aaps.wear.interaction.actions.WizardActivity
 import app.aaps.wear.interaction.activities.BgGraphActivity
 import app.aaps.wear.interaction.activities.LoopStatusActivity
 import app.aaps.wear.interaction.utils.MenuListActivity
+import app.aaps.wear.medtrum.MedtrumWatchActivity
+import app.aaps.wear.medtrum.MedtrumWatchLink
 import app.aaps.wear.watchfaces.PushedFace
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import dev.zacsweers.metro.Inject
@@ -29,6 +31,7 @@ import kotlinx.coroutines.launch
 class MainMenuActivity : MenuListActivity() {
 
     @Inject lateinit var watchFacePushHelper: WatchFacePushHelper
+    @Inject lateinit var medtrumWatchLink: MedtrumWatchLink
 
     override fun onCreate(savedInstanceState: Bundle?) {
         setTitle(R.string.app_name)
@@ -75,6 +78,9 @@ class MainMenuActivity : MenuListActivity() {
                 if (sp.getBoolean(R.string.key_prime_fill, false))
                     add(MenuItem(R.drawable.ic_canula, getString(R.string.menu_prime_fill)))
             }
+            // Handover test: only while the phone has handed a Medtrum patch session to the watch
+            if (medtrumWatchLink.status.value.hasSession)
+                add(MenuItem(R.drawable.ic_status, getString(R.string.medtrum_watch_title)))
             // Bottom of the menu: only present on Wear OS 6+ (where CWF and the other code-based
             // faces cannot run) and only while the pushed face is not installed. Since each app
             // install/update pushes the face automatically, this is the recovery action for a
@@ -107,6 +113,7 @@ class MainMenuActivity : MenuListActivity() {
             getString(R.string.menu_prime_fill)         -> startActivity(Intent(this, FillMenuActivity::class.java))
             getString(R.string.menu_resync)             -> rxBus.send(EventWearToMobile(ActionResendData("Re-Sync")))
             getString(R.string.menu_install_watchface)  -> installWatchFace()
+            getString(R.string.medtrum_watch_title)     -> startActivity(Intent(this, MedtrumWatchActivity::class.java))
         }
     }
 

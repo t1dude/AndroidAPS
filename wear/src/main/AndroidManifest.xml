@@ -22,7 +22,8 @@
 
     <!-- androidx.wear.watchfacepush requires minSdk 36; all usages are runtime-guarded by SDK checks -->
     <!-- The Dexcom G7 modules need Android 12. Direct-to-watch checks the version and is off below it. -->
-    <uses-sdk tools:overrideLibrary="androidx.wear.tiles,androidx.wear.watchfacepush,app.aaps.cgm.dexcomg7.core,app.aaps.cgm.dexcomg7.protocol" />
+    <!-- The Medtrum driver (handover test) and the modules it brings need Android 12 too. Its screen checks the version. -->
+    <uses-sdk tools:overrideLibrary="androidx.wear.tiles,androidx.wear.watchfacepush,app.aaps.cgm.dexcomg7.core,app.aaps.cgm.dexcomg7.protocol,app.aaps.pump.medtrum" />
 
     <!-- Package visibility for the pushed watchfaces, so the install state can be verified. Both
          faces, whichever one the slot holds: without its entry here getPackageInfo throws for an
@@ -989,6 +990,20 @@
             android:exported="false"
             android:taskAffinity=""
             android:theme="@style/WearAppCompatDark" />
+        <!-- Handover test: reads a Medtrum patch whose session the phone handed over -->
+        <service
+            android:name=".medtrum.MedtrumWatchService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+        <activity
+            android:name=".medtrum.MedtrumWatchActivity"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@style/WearAppCompatDark" />
+        <!-- The phone's Medtrum service comes with the driver module. The watch never runs it. -->
+        <service
+            android:name="app.aaps.pump.medtrum.services.MedtrumService"
+            tools:node="remove" />
         <activity
             android:name=".interaction.actions.ContactingMasterActivity"
             android:exported="false"

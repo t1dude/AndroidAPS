@@ -123,6 +123,9 @@ enum class NotificationId(
     // "Bolus block" enabled in pump settings - blocks all bolus delivery (wrong configuration for AAPS)
     DANA_BOLUS_BLOCK(URGENT, PUMP),
 
+    // Pump — handover test: a patch session came back from the watch
+    PUMP_SESSION_FROM_WATCH(IMPORTANT, PUMP),
+
     // Pump — Dana emulator
     PUMP_EMULATOR_DISPLAY(INFO, PUMP),
 

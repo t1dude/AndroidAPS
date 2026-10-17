@@ -52,6 +52,7 @@ class MedtrumComposeContent(
         var dialogMessage by remember { mutableStateOf("") }
         var showUnpairConfirm by remember { mutableStateOf(false) }
         var showMoveOutConfirm by remember { mutableStateOf(false) }
+        var showMoveToWatchConfirm by remember { mutableStateOf(false) }
         var showTakeInConfirm by remember { mutableStateOf(false) }
         var restoreOffer by remember { mutableStateOf<MedtrumOverviewEvent.OfferRestoreMode?>(null) }
 
@@ -104,9 +105,10 @@ class MedtrumComposeContent(
                     }
 
                     is MedtrumOverviewEvent.ConfirmUnpair      -> showUnpairConfirm = true
-                    is MedtrumOverviewEvent.ConfirmMoveSessionOut -> showMoveOutConfirm = true
-                    is MedtrumOverviewEvent.ConfirmTakeSessionIn  -> showTakeInConfirm = true
-                    is MedtrumOverviewEvent.OfferRestoreMode      -> restoreOffer = event
+                    is MedtrumOverviewEvent.ConfirmMoveSessionOut     -> showMoveOutConfirm = true
+                    is MedtrumOverviewEvent.ConfirmMoveSessionToWatch -> showMoveToWatchConfirm = true
+                    is MedtrumOverviewEvent.ConfirmTakeSessionIn      -> showTakeInConfirm = true
+                    is MedtrumOverviewEvent.OfferRestoreMode          -> restoreOffer = event
                 }
             }
         }
@@ -140,6 +142,18 @@ class MedtrumComposeContent(
                     overviewViewModel.performMoveSessionOut()
                 },
                 onDismiss = { showMoveOutConfirm = false }
+            )
+        }
+
+        if (showMoveToWatchConfirm) {
+            OkCancelDialog(
+                title = stringResource(MedtrumR.string.handover_test_move_to_watch),
+                message = stringResource(MedtrumR.string.handover_test_move_to_watch_confirm),
+                onConfirm = {
+                    showMoveToWatchConfirm = false
+                    overviewViewModel.performMoveSessionToWatch()
+                },
+                onDismiss = { showMoveToWatchConfirm = false }
             )
         }
 

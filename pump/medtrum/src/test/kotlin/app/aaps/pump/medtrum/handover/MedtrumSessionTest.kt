@@ -29,6 +29,7 @@ class MedtrumSessionTest {
     @Test
     fun theMovedAwayFlagStaysOnItsOwnDevice() {
         assertThat(MedtrumSession.keys).doesNotContain(MedtrumBooleanNonKey.SessionMovedAway)
+        assertThat(MedtrumSession.keys).doesNotContain(MedtrumStringNonKey.ModeBeforeMoveOut)
         assertThat(MedtrumSession.keys).contains(MedtrumLongNonKey.SessionToken)
         assertThat(MedtrumSession.keys).contains(MedtrumIntNonKey.CurrentSequenceNumber)
     }

@@ -1,18 +1,25 @@
 package app.aaps.pump.medtrum.handover
 
 import android.content.Context
+import app.aaps.core.data.model.RM
+import app.aaps.core.data.ue.Action
+import app.aaps.core.data.ue.Sources
+import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
+import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.core.interfaces.utils.Translator
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
+import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -44,8 +51,14 @@ class MedtrumSessionTransfer(
     private val fileListProvider: FileListProvider,
     private val commandQueue: CommandQueue,
     private val medtrumPump: MedtrumPump,
-    private val medtrumPlugin: MedtrumPlugin
+    private val medtrumPlugin: MedtrumPlugin,
+    private val loop: Loop,
+    private val profileFunction: ProfileFunction,
+    private val translator: Translator
 ) {
+
+    /** What [moveOut] and [takeIn] report. [modeToRestore] is set when the loop can be turned back on. */
+    data class Result(val message: String, val modeToRestore: RM.Mode? = null)
 
     private val _movedAway = MutableStateFlow(preferences.get(MedtrumBooleanNonKey.SessionMovedAway))
 
@@ -54,17 +67,22 @@ class MedtrumSessionTransfer(
 
     val isMovedAway: Boolean get() = _movedAway.value
 
-    /** Writes the session to a file and stops this phone talking to the patch. Returns the message to show. */
-    suspend fun moveOut(): String = withContext(Dispatchers.IO) {
-        if (medtrumPump.pumpSN == 0L) return@withContext rh.gs(R.string.handover_test_no_patch)
-        if (isMovedAway) return@withContext rh.gs(R.string.handover_test_already_moved)
-        if (commandQueue.size() > 0 || commandQueue.performing() != null) return@withContext rh.gs(R.string.handover_test_busy)
-        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext rh.gs(R.string.handover_test_no_directory)
-        // Stop talking to the patch first: the session must not move on after the file is written
+    /**
+     * Writes the session to a file and stops this phone talking to the patch. A running loop is turned
+     * off (Disable loop), and the mode it had is kept, to offer it again when a session is taken back in.
+     */
+    suspend fun moveOut(): Result = withContext(Dispatchers.IO) {
+        if (medtrumPump.pumpSN == 0L) return@withContext Result(rh.gs(R.string.handover_test_no_patch))
+        if (isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_already_moved))
+        if (commandQueue.size() > 0 || commandQueue.performing() != null) return@withContext Result(rh.gs(R.string.handover_test_busy))
+        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
+        // Stop talking to the patch first: the session must not move on after the file is written. From here
+        // the plugin reports no active patch, so AAPS neither connects nor sends commands.
         preferences.put(MedtrumBooleanNonKey.SessionMovedAway, true)
         _movedAway.value = true
         medtrumPump.takenInSerial = null
         medtrumPlugin.getService()?.disconnect("Handover test: session moved away")
+        val loopNote = turnLoopOff()
         val session = MedtrumSession.read(preferences, dateUtil.now())
         val name = MedtrumSession.FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + ".txt"
         val written = runCatching {
@@ -75,22 +93,25 @@ class MedtrumSessionTransfer(
             aapsLogger.error(LTag.PUMP, "Handover test: writing the session failed", it)
             preferences.put(MedtrumBooleanNonKey.SessionMovedAway, false)
             _movedAway.value = false
-            return@withContext rh.gs(R.string.handover_test_write_failed)
+            return@withContext Result(rh.gs(R.string.handover_test_write_failed), modeToRestore = rememberedMode())
         }
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to exports/$name")
-        rh.gs(R.string.handover_test_moved_out, "exports/$name")
+        Result(listOfNotNull(rh.gs(R.string.handover_test_moved_out, "exports/$name"), loopNote).joinToString("\n\n"))
     }
 
-    /** Takes in the newest session file from the exports folder. Returns the message to show. */
-    suspend fun takeIn(): String = withContext(Dispatchers.IO) {
-        if (medtrumPump.pumpSN != 0L && !isMovedAway) return@withContext rh.gs(R.string.handover_test_has_own_patch)
-        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext rh.gs(R.string.handover_test_no_directory)
+    /**
+     * Takes in the newest session file from the exports folder. When this phone turned its loop off at
+     * move out, the result offers that mode again.
+     */
+    suspend fun takeIn(): Result = withContext(Dispatchers.IO) {
+        if (medtrumPump.pumpSN != 0L && !isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_has_own_patch))
+        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
         val file = dir.listFiles()
             .filter { it.name?.startsWith(MedtrumSession.FILE_PREFIX) == true }
             .maxByOrNull { it.lastModified() }
-            ?: return@withContext rh.gs(R.string.handover_test_no_file)
+            ?: return@withContext Result(rh.gs(R.string.handover_test_no_file))
         val session = runCatching { context.contentResolver.openInputStream(file.uri)?.use { MedtrumSession.parse(it.readBytes().decodeToString()) } }.getOrNull()
-        if (session == null || session.serial == 0L) return@withContext rh.gs(R.string.handover_test_bad_file, file.name ?: "?")
+        if (session == null || session.serial == 0L) return@withContext Result(rh.gs(R.string.handover_test_bad_file, file.name ?: "?"))
         // Before the serial is written: the service resets a patch whose serial changes, unless it is this one
         medtrumPump.takenInSerial = session.serial
         session.writeTo(preferences)
@@ -99,6 +120,42 @@ class MedtrumSessionTransfer(
         medtrumPump.loadVarsFromSP()
         medtrumPump.loadUserSettingsFromSP()
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} taken in from ${file.name}, exported ${dateUtil.dateAndTimeString(session.exportedAt)}")
-        rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt))
+        Result(rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt)), modeToRestore = rememberedMode())
+    }
+
+    /** The mode this phone had before it moved its session out, if any. */
+    fun rememberedMode(): RM.Mode? =
+        preferences.get(MedtrumStringNonKey.ModeBeforeMoveOut).takeIf { it.isNotEmpty() }?.let { name -> RM.Mode.entries.firstOrNull { it.name == name } }
+
+    fun modeName(mode: RM.Mode): String = translator.translate(mode)
+
+    /** Turns the loop back on in [mode], as the user confirmed. */
+    suspend fun restoreMode(mode: RM.Mode) {
+        val profile = profileFunction.getProfile()
+        val action = when (mode) {
+            RM.Mode.CLOSED_LOOP     -> Action.CLOSED_LOOP_MODE
+            RM.Mode.CLOSED_LOOP_LGS -> Action.LGS_LOOP_MODE
+            else                    -> Action.OPEN_LOOP_MODE
+        }
+        if (profile != null && loop.handleRunningModeChange(mode, action, Sources.Medtrum, profile = profile))
+            aapsLogger.info(LTag.PUMP, "Handover test: loop turned back on as $mode")
+        else aapsLogger.warn(LTag.PUMP, "Handover test: could not turn the loop back on as $mode")
+        forgetRememberedMode()
+    }
+
+    fun forgetRememberedMode() = preferences.put(MedtrumStringNonKey.ModeBeforeMoveOut, "")
+
+    /** Disable loop when the loop is running, remembering the mode. Returns a line for the message, if any. */
+    private suspend fun turnLoopOff(): String? {
+        val mode = loop.runningMode()
+        if (!mode.isLoopRunning()) return null
+        val profile = profileFunction.getProfile() ?: return null
+        if (!loop.handleRunningModeChange(RM.Mode.DISABLED_LOOP, Action.LOOP_DISABLED, Sources.Medtrum, profile = profile)) {
+            aapsLogger.warn(LTag.PUMP, "Handover test: could not disable the loop")
+            return rh.gs(R.string.handover_test_loop_not_disabled)
+        }
+        preferences.put(MedtrumStringNonKey.ModeBeforeMoveOut, mode.name)
+        aapsLogger.info(LTag.PUMP, "Handover test: loop disabled, was $mode")
+        return rh.gs(R.string.handover_test_loop_disabled, translator.translate(mode))
     }
 }

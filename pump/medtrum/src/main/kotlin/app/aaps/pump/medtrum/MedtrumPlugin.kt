@@ -166,7 +166,8 @@ class MedtrumPlugin(
         medtrumPump.pumpSNFromSP != 0L && medtrumPump.pumpState > MedtrumPumpState.EJECTED
 
     override fun isInitialized(): Boolean {
-        return isConfigured() && medtrumPump.pumpState < MedtrumPumpState.STOPPED
+        // A session moved to another device (handover test) is not this phone's patch: no connects, no commands
+        return isConfigured() && !preferences.get(MedtrumBooleanNonKey.SessionMovedAway) && medtrumPump.pumpState < MedtrumPumpState.STOPPED
     }
 
     override fun isSuspended(): Boolean {

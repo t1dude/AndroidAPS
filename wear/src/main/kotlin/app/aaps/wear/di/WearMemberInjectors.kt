@@ -56,6 +56,7 @@ import app.aaps.wear.interaction.menus.MainMenuActivity
 import app.aaps.wear.interaction.menus.PreferenceMenuActivity
 import app.aaps.wear.interaction.menus.StatusMenuActivity
 import app.aaps.wear.interaction.menus.TileMenuActivity
+import app.aaps.wear.medtrum.MedtrumWatchActivity
 import app.aaps.wear.tile.ActionsTileService
 import app.aaps.wear.tile.ActionsTileSettingsActivity
 import app.aaps.wear.tile.BgGraphTileService
@@ -335,6 +336,12 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(G7WatchActivity::class)
     fun bindG7WatchActivity(injector: MembersInjector<G7WatchActivity>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(MedtrumWatchActivity::class)
+    fun bindMedtrumWatchActivity(injector: MembersInjector<MedtrumWatchActivity>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

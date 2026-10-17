@@ -466,5 +466,6 @@
     <string name="medtrum_watch_auto_running">Reading the Medtrum patch every 5 minutes</string>
     <string name="medtrum_watch_hand_back">Hand back to phone</string>
     <string name="medtrum_watch_service_channel">Medtrum test</string>
+    <string name="medtrum_watch_send_log">Send log to phone</string>
 
 </resources>

@@ -1,11 +1,13 @@
 package app.aaps.wear.medtrum
 
+import android.app.AlarmManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.os.Build
+import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.logging.AAPSLogger
@@ -27,6 +29,7 @@ import app.aaps.pump.medtrum.comm.packets.SynchronizePacket
 import app.aaps.pump.medtrum.handover.MedtrumSession
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
+import app.aaps.wear.BuildConfig
 import app.aaps.wear.R
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -34,9 +37,7 @@ import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -45,6 +46,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -61,6 +63,12 @@ import kotlin.math.roundToLong
  *
  * Only one device may talk to the patch. The phone stops before it sends the session; the watch stops
  * before it sends it back.
+ *
+ * Reads every 5 minutes are woken by an alarm. A plain timer does not run while the watch sleeps with the
+ * screen off, so it can take far longer than 5 minutes.
+ *
+ * The test log is kept in a file, because the watch's own log is too short to hold a test, and goes to the
+ * phone's exports folder at hand back or on request.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -83,6 +91,7 @@ class MedtrumWatchLink(
         val lastReadOk: Boolean? = null,
         /** What the last good read found, ready to show. */
         val result: String? = null,
+        /** The newest lines of the test log, for the screen. */
         val log: List<String> = emptyList()
     ) {
 
@@ -97,7 +106,11 @@ class MedtrumWatchLink(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private val mutex = Mutex()
     private var started = false
-    private var autoReadJob: Job? = null
+
+    /** Survives a restart of the app, so reads every 5 minutes go on after one. */
+    private val state by lazy { context.getSharedPreferences(STATE_FILE, Context.MODE_PRIVATE) }
+    private val logFile by lazy { File(context.filesDir, LOG_FILE) }
+    private val logLock = Any()
 
     @Volatile private var connected: CompletableDeferred<Boolean>? = null
     @Volatile private var pending: Pending? = null
@@ -112,43 +125,83 @@ class MedtrumWatchLink(
         if (started) return
         started = true
         medtrumPump.loadVarsFromSP()
-        _status.update { it.copy(serial = currentSerial()) }
+        _status.update { it.copy(serial = currentSerial(), log = tailLines()) }
         scope.launch { rxBus.toFlow(EventData.MedtrumSessionToWatch::class).collect { takeIn(it.session) } }
+        // The app was restarted while reading every 5 minutes: go on
+        if (state.getBoolean(KEY_AUTO_READ, false) && _status.value.hasSession) {
+            log("App restarted, reading every 5 minutes goes on")
+            setAutoRead(true)
+        }
     }
 
     /** One status read, as the "Read status" button does. */
     fun readNow() {
-        scope.launch { readStatus("button") }
+        val wakeLock = acquireWakeLock()
+        scope.launch {
+            try {
+                readStatus("button")
+            } finally {
+                wakeLock.release()
+            }
+        }
     }
 
     /** Reads every [AUTO_READ_MS] while on, to see whether the link holds over time and with the screen off. */
     fun setAutoRead(on: Boolean) {
-        autoReadJob?.cancel()
-        autoReadJob = null
+        state.edit().putBoolean(KEY_AUTO_READ, on).apply()
         _status.update { it.copy(autoRead = on) }
         if (on) {
-            MedtrumWatchService.start(context)
-            autoReadJob = scope.launch {
-                while (true) {
-                    readStatus("auto")
-                    delay(AUTO_READ_MS)
-                }
-            }
-        } else MedtrumWatchService.stop(context)
+            // Android may refuse a foreground service started from the background (after a restart). The
+            // alarms still run without it.
+            runCatching { MedtrumWatchService.start(context) }.onFailure { log("Foreground service not started: ${it.message}") }
+            log("Reading every 5 minutes: on")
+            onAlarm(planned = System.currentTimeMillis())
+        } else {
+            cancelAlarm()
+            MedtrumWatchService.stop(context)
+            log("Reading every 5 minutes: off")
+        }
     }
 
-    /** Stops talking to the patch and sends the session back to the phone. */
+    /**
+     * The alarm for the next read went off (see [MedtrumWatchAlarmReceiver]). The wake lock is taken before
+     * this returns: the alarm keeps the watch awake only until then.
+     */
+    fun onAlarm(planned: Long = state.getLong(KEY_NEXT_AT, 0L)) {
+        if (!state.getBoolean(KEY_AUTO_READ, false)) return
+        val wakeLock = acquireWakeLock()
+        val now = System.currentTimeMillis()
+        if (planned > 0 && now - planned > LATE_MS) log("Alarm ${(now - planned) / 1000} s late")
+        scheduleAlarm(now + AUTO_READ_MS)
+        scope.launch {
+            try {
+                readStatus("auto")
+            } finally {
+                wakeLock.release()
+            }
+        }
+    }
+
+    /** Sends the test log to the phone's exports folder, without handing the session back. */
+    fun sendLog() {
+        scope.launch {
+            log("Log sent to the phone")
+            rxBus.send(EventWearToMobile(EventData.MedtrumWatchLog(logForPhone())))
+        }
+    }
+
+    /** Stops talking to the patch and sends the session back to the phone, with the test log. */
     fun handBack() {
         scope.launch {
-            setAutoRead(false)
+            if (_status.value.autoRead) setAutoRead(false)
             mutex.withLock {
                 if (!_status.value.hasSession) return@withLock
                 // Stop first: the session must not move on after it is sent
                 preferences.put(MedtrumBooleanNonKey.SessionMovedAway, true)
                 val session = MedtrumSession.read(preferences, System.currentTimeMillis())
-                rxBus.send(EventWearToMobile(EventData.MedtrumSessionToPhone(session.toText())))
                 _status.update { it.copy(serial = 0L, result = null, lastReadOk = null) }
                 log("Session of patch ${session.serial.toString(16)} handed back to the phone")
+                rxBus.send(EventWearToMobile(EventData.MedtrumSessionToPhone(session.toText(), logForPhone())))
             }
         }
     }
@@ -163,7 +216,11 @@ class MedtrumWatchLink(
         preferences.put(MedtrumBooleanNonKey.SessionMovedAway, false)
         medtrumPump.loadVarsFromSP()
         _status.update { it.copy(serial = currentSerial(), lastReadAt = null, lastReadOk = null, result = null) }
-        log("Took in the session of patch ${session.serial.toString(16)}, exported ${time(session.exportedAt)}")
+        log("----- Took in the session of patch ${session.serial.toString(16)}, exported ${time(session.exportedAt)}")
+        log(
+            "Watch ${Build.MANUFACTURER} ${Build.MODEL}, Android ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT}), AAPS ${BuildConfig.BUILDVERSION}, " +
+                "battery unrestricted: ${isBatteryUnrestricted()}"
+        )
         notifySessionReceived()
     }
 
@@ -179,7 +236,7 @@ class MedtrumWatchLink(
             read(serial, reason)
         } catch (e: Exception) {
             aapsLogger.error(LTag.PUMPCOMM, "Medtrum watch test: status read failed", e)
-            log("Read failed: ${e.message}")
+            log("Read failed: ${e.javaClass.simpleName} ${e.message}")
             false
         } finally {
             pending = null
@@ -195,7 +252,7 @@ class MedtrumWatchLink(
 
     private suspend fun read(serial: Long, reason: String): Boolean {
         val started = System.currentTimeMillis()
-        log("Connecting to patch ${serial.toString(16)} ($reason)")
+        log("Read ($reason): connecting to patch ${serial.toString(16)}")
         transport.setMedtrumCallback(this)
         val link = CompletableDeferred<Boolean>()
         connected = link
@@ -204,10 +261,10 @@ class MedtrumWatchLink(
             return false
         }
         if (withTimeoutOrNull(CONNECT_TIMEOUT_MS) { link.await() } != true) {
-            log("No connection to the patch")
+            log("No connection to the patch after ${seconds(started)} s")
             return false
         }
-        log("Connected after ${(System.currentTimeMillis() - started) / 1000} s")
+        log("Connected after ${seconds(started)} s")
         val steps = listOf(
             "authorize" to AuthorizePacket(injector),
             "device type" to GetDeviceTypePacket(injector),
@@ -216,13 +273,18 @@ class MedtrumWatchLink(
             "subscribe" to SubscribePacket(injector)
         )
         for ((name, packet) in steps) {
+            val stepStarted = System.currentTimeMillis()
             if (!exchange(packet)) {
-                log("Step $name failed")
+                log("Step $name failed after ${System.currentTimeMillis() - stepStarted} ms")
                 return false
             }
+            log("Step $name ok in ${System.currentTimeMillis() - stepStarted} ms")
         }
-        val clockOff = ((medtrumPump.lastTimeReceivedFromPump - System.currentTimeMillis()) / 1000.0).roundToLong()
-        log("Status read in ${(System.currentTimeMillis() - started) / 1000} s, patch clock off by $clockOff s")
+        log(
+            "Read ok in ${seconds(started)} s: ${medtrumPump.pumpState}, reservoir ${medtrumPump.reservoir} U, battery ${medtrumPump.batteryVoltage_B} V, " +
+                "basal ${medtrumPump.lastBasalRate} U/h ${medtrumPump.lastBasalType}, patch clock off by ${clockOffSeconds()} s, " +
+                "history ${medtrumPump.syncedSequenceNumber}/${medtrumPump.currentSequenceNumber}"
+        )
         return true
     }
 
@@ -235,21 +297,26 @@ class MedtrumWatchLink(
         return ok
     }
 
-    private fun describe(): String {
-        val clockOff = ((medtrumPump.lastTimeReceivedFromPump - System.currentTimeMillis()) / 1000.0).roundToLong()
-        return context.getString(
+    private fun describe(): String =
+        context.getString(
             R.string.medtrum_watch_result,
             context.getString(medtrumPump.pumpState.label),
             medtrumPump.reservoir,
             medtrumPump.batteryVoltage_B,
             medtrumPump.lastBasalRate,
             medtrumPump.lastBasalType.name,
-            clockOff
+            clockOffSeconds()
         )
-    }
+
+    private fun clockOffSeconds(): Long = ((medtrumPump.lastTimeReceivedFromPump - System.currentTimeMillis()) / 1000.0).roundToLong()
+
+    private fun seconds(since: Long): Long = (System.currentTimeMillis() - since) / 1000
 
     private fun currentSerial(): Long =
         if (preferences.get(MedtrumBooleanNonKey.SessionMovedAway)) 0L else medtrumPump.pumpSN
+
+    private fun isBatteryUnrestricted(): Boolean =
+        context.getSystemService(PowerManager::class.java)?.isIgnoringBatteryOptimizations(context.packageName) == true
 
     // MedtrumBleCallback: called on the transport's threads
 
@@ -258,6 +325,7 @@ class MedtrumWatchLink(
     }
 
     override fun onDisconnected() {
+        if (pending != null) log("Patch disconnected during a step")
         connected?.complete(false)
         pending?.done?.complete(false)
     }
@@ -281,13 +349,63 @@ class MedtrumWatchLink(
         } else current.done.complete(false)
     }
 
+    // Alarm and wake lock
+
+    private fun alarmIntent(): PendingIntent =
+        PendingIntent.getBroadcast(context, 0, Intent(context, MedtrumWatchAlarmReceiver::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+
+    private fun scheduleAlarm(at: Long) {
+        state.edit().putLong(KEY_NEXT_AT, at).apply()
+        val alarmManager = context.getSystemService(AlarmManager::class.java)
+        try {
+            alarmManager.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, alarmIntent())
+        } catch (e: SecurityException) {
+            // No exact alarms for this app: an inexact one may come several minutes late
+            log("Exact alarm not allowed (${e.message}), using an inexact one")
+            alarmManager.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, at, alarmIntent())
+        }
+    }
+
+    private fun cancelAlarm() {
+        context.getSystemService(AlarmManager::class.java).cancel(alarmIntent())
+        state.edit().remove(KEY_NEXT_AT).apply()
+    }
+
+    /** Held for one read. The timeout is a guard only: a read gives up long before. */
+    private fun acquireWakeLock(): PowerManager.WakeLock =
+        context.getSystemService(PowerManager::class.java)
+            .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "AndroidAPS:MedtrumWatchTest")
+            .apply {
+                setReferenceCounted(false)
+                acquire(WAKE_LOCK_MS)
+            }
+
+    // Test log
+
     private fun log(text: String) {
         aapsLogger.info(LTag.PUMPCOMM, "Medtrum watch test: $text")
-        val line = "${time(System.currentTimeMillis())} $text"
-        _status.update { it.copy(log = (it.log + line).takeLast(LOG_LINES)) }
+        val line = "${dateTime(System.currentTimeMillis())} $text"
+        synchronized(logLock) {
+            runCatching {
+                logFile.appendText(line + "\n")
+                if (logFile.length() > LOG_FILE_MAX_BYTES) logFile.writeText(logFile.readText().takeLast(LOG_FILE_KEEP_CHARS))
+            }.onFailure { aapsLogger.error(LTag.PUMPCOMM, "Medtrum watch test: writing the log failed", it) }
+        }
+        _status.update { it.copy(log = (it.log + line).takeLast(SCREEN_LINES)) }
+    }
+
+    private fun tailLines(): List<String> = synchronized(logLock) {
+        runCatching { if (logFile.exists()) logFile.readLines().takeLast(SCREEN_LINES) else emptyList() }.getOrDefault(emptyList())
+    }
+
+    /** The newest part of the log: a message to the phone may not be much larger. */
+    private fun logForPhone(): String = synchronized(logLock) {
+        runCatching { if (logFile.exists()) logFile.readText().takeLast(PHONE_LOG_CHARS) else "" }.getOrDefault("")
     }
 
     private fun time(at: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(at))
+
+    private fun dateTime(at: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(at))
 
     private fun notifySessionReceived() {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -306,9 +424,20 @@ class MedtrumWatchLink(
     companion object {
 
         private const val AUTO_READ_MS = 5 * 60 * 1000L
+        private const val LATE_MS = 30 * 1000L
         private const val CONNECT_TIMEOUT_MS = 60 * 1000L
         private const val COMMAND_TIMEOUT_MS = 30 * 1000L
-        private const val LOG_LINES = 40
+        private const val WAKE_LOCK_MS = 4 * 60 * 1000L
+        private const val SCREEN_LINES = 40
+
+        // A message to the phone is limited to about 100 KB
+        private const val PHONE_LOG_CHARS = 80_000
+        private const val LOG_FILE_MAX_BYTES = 400_000L
+        private const val LOG_FILE_KEEP_CHARS = 200_000
+        private const val LOG_FILE = "medtrum_watch_test.log"
+        private const val STATE_FILE = "medtrum_watch_test"
+        private const val KEY_AUTO_READ = "auto_read"
+        private const val KEY_NEXT_AT = "next_read_at"
         private const val CHANNEL_ID = "AndroidAPS-MedtrumWatchTest"
 
         // Clear of the ids DataLayerListenerServiceWear (1, 2, 556677), CgmAlarmWear (7700..7955) and

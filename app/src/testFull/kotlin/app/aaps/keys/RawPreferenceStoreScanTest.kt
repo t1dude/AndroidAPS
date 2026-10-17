@@ -60,6 +60,10 @@ class RawPreferenceStoreScanTest {
         "implementation/src/androidMain/kotlin/app/aaps/implementation/maintenance/ImportExportPrefsImpl.kt" to "the import/export itself - it copies the whole store by design",
         "implementation/src/commonMain/kotlin/app/aaps/implementation/maintenance/LocalImportExportPrefs.kt" to "the multiplatform half of the same import/export",
         "implementation/src/commonMain/kotlin/app/aaps/implementation/maintenance/formats/PrefsTransfer.kt" to "reads and writes the whole store for a transfer",
+        // The watch handover snapshot carries the exportable settings to the watch, the same set an
+        // export writes, filtered by `Preferences.isExportableKey`.
+        "implementation/src/androidMain/kotlin/app/aaps/implementation/handover/HandoverSnapshotWriterImpl.kt" to
+            "copies the exportable settings for the watch handover, as an export does",
         // Deliberately below `Preferences`, and the reason is the opposite of carelessness. It writes
         // an import as ONE `edit(commit = true)` and then calls `Preferences.reloadFromStore()` once.
         // Going through `preferences.put` per key would be ~500 separate commits, would let a live

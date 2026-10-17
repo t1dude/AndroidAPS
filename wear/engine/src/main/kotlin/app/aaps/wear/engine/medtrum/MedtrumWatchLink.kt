@@ -32,6 +32,7 @@ import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.wear.engine.CompanionLink
 import app.aaps.wear.engine.R
+import app.aaps.wear.engine.WatchEngine
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -213,6 +214,8 @@ class MedtrumWatchLink(
                 _status.update { it.copy(serial = 0L, result = null, lastReadOk = null) }
                 log("Session of patch ${session.serial.toString(16)} handed back to the phone")
                 companion.sendToPhone(EventData.MedtrumSessionToPhone(session.toText(), logForPhone()))
+                // The engine stops with the session
+                WatchEngine.afterHandback()
             }
         }
     }
@@ -444,6 +447,9 @@ class MedtrumWatchLink(
             }
 
     // Test log
+
+    /** A line from the rest of the engine (start, settings, loop runs) for the same test log. */
+    fun note(text: String) = log(text)
 
     private fun log(text: String) {
         aapsLogger.info(LTag.PUMPCOMM, "Medtrum watch test: $text")

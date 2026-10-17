@@ -7,6 +7,8 @@ import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.db.PersistenceLayer
+import app.aaps.core.interfaces.handover.HandoverSnapshot
+import app.aaps.core.interfaces.handover.HandoverSnapshotWriter
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.FileListProvider
@@ -19,6 +21,7 @@ import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearFile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.stats.TddCalculator
 import app.aaps.core.interfaces.utils.DateUtil
@@ -41,6 +44,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -75,7 +79,8 @@ class MedtrumSessionTransfer(
     private val tddCalculator: TddCalculator,
     private val pumpSync: PumpSync,
     private val temporaryBasalStorage: TemporaryBasalStorage,
-    private val persistenceLayer: PersistenceLayer
+    private val persistenceLayer: PersistenceLayer,
+    private val snapshotWriter: HandoverSnapshotWriter
 ) {
 
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
@@ -136,12 +141,9 @@ class MedtrumSessionTransfer(
             return@withContext Result(rh.gs(R.string.handover_test_write_failed), modeToRestore = rememberedMode())
         }
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to exports/$name")
-        if (toWatch) {
-            rxBus.send(EventMobileToWear(EventData.MedtrumSessionToWatch(session.toText())))
-            aapsLogger.info(LTag.PUMP, "Handover test: session sent to the watch")
-        }
+        val snapshotNote = if (toWatch) sendToWatch(session) else null
         val moved = if (toWatch) rh.gs(R.string.handover_test_moved_to_watch, "exports/$name") else rh.gs(R.string.handover_test_moved_out, "exports/$name")
-        Result(listOfNotNull(moved, describeSent(extras), loopNote).joinToString("\n\n"))
+        Result(listOfNotNull(moved, describeSent(extras), snapshotNote, loopNote).joinToString("\n\n"))
     }
 
     /**
@@ -169,6 +171,25 @@ class MedtrumSessionTransfer(
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} taken in from ${file.name}, exported ${dateUtil.dateAndTimeString(session.exportedAt)}")
         val takenIn = rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt))
         Result(listOfNotNull(takenIn, basalNote).joinToString("\n\n"), modeToRestore = rememberedMode())
+    }
+
+    /**
+     * Sends the session to the watch inside the handover snapshot: the cut down database and the settings,
+     * so the watch's AAPS engine starts where this phone stopped. Written after the loop was turned off, so
+     * the engine starts with it off too. When the snapshot cannot be written, the session goes alone, as
+     * before, and the result says so.
+     */
+    private suspend fun sendToWatch(session: MedtrumSession): String? {
+        val file = File(context.cacheDir, SNAPSHOT_FILE)
+        return if (snapshotWriter.write(file.absolutePath, session.toText())) {
+            rxBus.send(EventMobileToWearFile(file.absolutePath, HandoverSnapshot.CHANNEL_PATH))
+            aapsLogger.info(LTag.PUMP, "Handover test: snapshot with the session sent to the watch (${file.length() / 1024} KB)")
+            null
+        } else {
+            rxBus.send(EventMobileToWear(EventData.MedtrumSessionToWatch(session.toText())))
+            aapsLogger.warn(LTag.PUMP, "Handover test: no snapshot, session sent to the watch alone")
+            rh.gs(R.string.handover_test_no_snapshot)
+        }
     }
 
     /**
@@ -321,6 +342,9 @@ class MedtrumSessionTransfer(
     companion object {
 
         const val WATCH_LOG_PREFIX = "Medtrum_watch_log_"
+
+        /** In the app's own cache: it holds the session and the settings, and is only kept for sending. */
+        private const val SNAPSHOT_FILE = "handover/snapshot.zip"
 
         /** Dynamic ISF needs the total daily dose of the last 7 days. */
         private const val TDD_DAYS = 7L

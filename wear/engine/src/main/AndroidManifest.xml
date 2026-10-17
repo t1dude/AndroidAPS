@@ -21,6 +21,9 @@
         <receiver
             android:name=".receivers.CarbSuggestionReceiver"
             android:exported="false" />
+        <receiver
+            android:name=".EngineRestartReceiver"
+            android:exported="false" />
     </application>
 
 </manifest>

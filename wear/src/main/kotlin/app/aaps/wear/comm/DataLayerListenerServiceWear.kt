@@ -4,11 +4,13 @@ import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
 import android.content.Intent
+import android.net.Uri
 import android.os.Handler
 import android.os.HandlerThread
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import app.aaps.core.interfaces.di.injectMetroMembers
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.AapsSchedulers
@@ -21,6 +23,7 @@ import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
 import app.aaps.wear.R
 import app.aaps.wear.events.EventWearPreferenceChange
+import app.aaps.wear.handover.WatchEngineHook
 import app.aaps.wear.heartrate.HeartRateListener
 import app.aaps.wear.interaction.ConfigurationActivity
 import app.aaps.wear.watchfaces.WatchFacePushHelper
@@ -28,6 +31,7 @@ import app.aaps.wear.wearStepCount.StepCountListener
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
@@ -47,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
+import java.io.File
 
 class DataLayerListenerServiceWear : WearableListenerService() {
 
@@ -60,6 +65,7 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
+    private val channelClient by lazy { Wearable.getChannelClient(this) }
     //private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -150,6 +156,35 @@ class DataLayerListenerServiceWear : WearableListenerService() {
             }
         }
     }
+
+    /**
+     * A file from the phone, too big for a message: the handover snapshot. It is received into the app's
+     * files and handed on only when the channel closed normally, so a half received file is never used.
+     */
+    override fun onChannelOpened(channel: ChannelClient.Channel) {
+        super.onChannelOpened(channel)
+        if (channel.path != HandoverSnapshot.CHANNEL_PATH) return
+        val file = snapshotFile()
+        file.parentFile?.mkdirs()
+        file.delete()
+        aapsLogger.info(LTag.WEAR, "Handover snapshot: receiving")
+        channelClient.receiveFile(channel, Uri.fromFile(file), false)
+    }
+
+    override fun onInputClosed(channel: ChannelClient.Channel, closeReason: Int, appSpecificErrorCode: Int) {
+        super.onInputClosed(channel, closeReason, appSpecificErrorCode)
+        if (channel.path != HandoverSnapshot.CHANNEL_PATH) return
+        val file = snapshotFile()
+        if (closeReason == ChannelClient.ChannelCallback.CLOSE_REASON_NORMAL && file.exists()) {
+            aapsLogger.info(LTag.WEAR, "Handover snapshot: received ${file.length()} bytes")
+            WatchEngineHook.onSnapshot(file)
+        } else {
+            aapsLogger.error(LTag.WEAR, "Handover snapshot: transfer failed, reason $closeReason/$appSpecificErrorCode")
+            file.delete()
+        }
+    }
+
+    private fun snapshotFile() = File(filesDir, "handover/incoming_snapshot.zip")
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {

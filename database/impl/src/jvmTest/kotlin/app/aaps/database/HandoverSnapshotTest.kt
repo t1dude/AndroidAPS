@@ -3,6 +3,11 @@ package app.aaps.database
 import app.aaps.database.di.JvmAppDatabaseBuilder
 import app.aaps.database.entities.APSResult
 import app.aaps.database.entities.GlucoseValue
+import app.aaps.database.entities.ProfileSwitch
+import app.aaps.database.entities.data.Block
+import app.aaps.database.entities.data.GlucoseUnit
+import app.aaps.database.entities.data.TargetBlock
+import app.aaps.database.entities.embedments.InsulinConfiguration
 import app.aaps.database.entities.TemporaryBasal
 import app.aaps.database.entities.TemporaryTarget
 import app.aaps.database.entities.TotalDailyDose
@@ -71,6 +76,45 @@ class HandoverSnapshotTest {
         assertThat(database.glucoseValueDao.findById(oldReading)).isNotNull()
         assertThat(database.apsResultDao.findById(apsResult)).isNotNull()
     }
+
+    /**
+     * Found on the watch: three temporary profile switches after the last permanent one, all before the
+     * window. Keeping only the last three dropped the permanent one, so the engine had no requested profile,
+     * its pump no basal, and its loop stopped on every reading.
+     */
+    @Test
+    fun `the permanent profile switch in force stays when temporary ones follow it`() = runTest {
+        val now = Clock.System.now().toEpochMilliseconds()
+        val since = now - 30.hours.inWholeMilliseconds
+
+        val olderPermanent = database.profileSwitchDao.insert(profileSwitch(since - 5.days.inWholeMilliseconds, duration = 0L))
+        val permanent = database.profileSwitchDao.insert(profileSwitch(since - 3.days.inWholeMilliseconds, duration = 0L))
+        val temporary = (1..4).map { database.profileSwitchDao.insert(profileSwitch(since - it.hours.inWholeMilliseconds, duration = 30.minutes.inWholeMilliseconds)) }
+
+        repository.writeHandoverSnapshot(snapshotPath, since, since)
+        val copy = JvmAppDatabaseBuilder().provideAppDatabase(snapshotPath).also { snapshot = it }
+
+        // The one the engine looks up as running now
+        assertThat(copy.profileSwitchDao.getPermanentProfileSwitchActiveAt(now)?.id).isEqualTo(permanent)
+        assertThat(copy.profileSwitchDao.findById(olderPermanent)).isNull()
+        // The last three before the window stay as before
+        temporary.take(3).forEach { assertThat(copy.profileSwitchDao.findById(it)).isNotNull() }
+        assertThat(copy.profileSwitchDao.findById(temporary[3])).isNull()
+    }
+
+    private fun profileSwitch(timestamp: Long, duration: Long) = ProfileSwitch(
+        timestamp = timestamp,
+        basalBlocks = listOf(Block(24.hours.inWholeMilliseconds, 0.9)),
+        isfBlocks = listOf(Block(24.hours.inWholeMilliseconds, 40.0)),
+        icBlocks = listOf(Block(24.hours.inWholeMilliseconds, 10.0)),
+        targetBlocks = listOf(TargetBlock(24.hours.inWholeMilliseconds, 100.0, 100.0)),
+        glucoseUnit = GlucoseUnit.MGDL,
+        profileName = "Normal",
+        timeshift = 0L,
+        percentage = 100,
+        duration = duration,
+        insulinConfiguration = InsulinConfiguration("Lyumjev", 7.hours.inWholeMilliseconds, 45.minutes.inWholeMilliseconds, 1.0)
+    )
 
     private fun reading(timestamp: Long) = GlucoseValue(
         timestamp = timestamp, raw = null, value = 120.0, trendArrow = GlucoseValue.TrendArrow.FLAT, noise = null,

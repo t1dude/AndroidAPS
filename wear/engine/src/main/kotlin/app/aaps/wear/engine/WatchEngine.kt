@@ -13,9 +13,6 @@ import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.LTag
-import app.aaps.core.interfaces.maintenance.Prefs
-import app.aaps.core.interfaces.plugin.PluginBase
-import app.aaps.core.interfaces.rx.events.EventAppInitialized
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.objects.di.CoreObjectsGraph
 import app.aaps.database.DATABASE_VERSION
@@ -24,7 +21,6 @@ import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import app.aaps.wear.engine.di.EngineBindings
 import app.aaps.wear.engine.di.EngineGraph
-import app.aaps.wear.engine.di.EngineStringOwners
 import app.aaps.wear.engine.medtrum.MedtrumWatchActivity
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
@@ -33,11 +29,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.util.zip.ZipInputStream
 
@@ -233,37 +227,7 @@ object WatchEngine {
             try {
                 startMutex.withLock {
                     if (!started) {
-                        EngineStringOwners.registerAll()
-                        graph.resourceHelperImpl.start()
-                        if (settings != null) {
-                            val outcome = graph.preferenceImportApplier.apply(Prefs(settings, emptyMap()), keepPumpSettings = true)
-                            graph.aapsLogger.info(LTag.CORE, "Engine: phone settings applied: $outcome")
-                            graph.medtrumWatchLink.note("Engine: ${settings.size} phone settings taken in")
-                        }
-                        val (plugins, problems) = mergePlugins(
-                            listOf(
-                                "Metro" to graph.contributedPlugins,
-                                "Metro @APS" to graph.contributedApsPlugins,
-                                "Metro @PumpDriver" to graph.contributedPumpDriverPlugins,
-                                "Metro @NotNSClient" to graph.contributedNotNsClientPlugins
-                            )
-                        )
-                        problems.forEach { graph.aapsLogger.error(LTag.CORE, "Engine plugin list: $it") }
-                        graph.pluginStore.plugins = EnginePlugins.forWatch(plugins)
-                        val pluginsStarted = graph.configBuilder.initialize()
-                        if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
-                            graph.aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")
-                        graph.runningModeReconciler.start()
-                        graph.config.initCompleted()
-                        graph.rxBus.send(EventAppInitialized())
-                        graph.aapsLogger.info(LTag.CORE, "Engine started with ${graph.pluginStore.plugins.size} plugins")
-                        // A line for the test log only: it must never stop the start
-                        val pump = runCatching { graph.activePlugin.activePump.javaClass.simpleName }.getOrDefault("none")
-                        val glucose = runCatching { graph.activePlugin.activeBgSource.javaClass.simpleName }.getOrDefault("none")
-                        graph.medtrumWatchLink.note(
-                            "Engine started: ${graph.pluginStore.plugins.count { it.isEnabled() }} of ${graph.pluginStore.plugins.size} plugins on, pump $pump, glucose $glucose"
-                        )
-                        graph.engineReporter.start()
+                        graph.startEngine(settings)
                         started = true
                     }
                 }
@@ -275,21 +239,6 @@ object WatchEngine {
                 runCatching { graph.medtrumWatchLink.note("Engine: start failed: ${e.javaClass.simpleName} ${e.message}") }
             }
         }
-    }
-
-    /** The plugin buckets in display order, as `mergePlugins` in `:app` merges them. A clash is reported, not hidden. */
-    private fun mergePlugins(sources: List<Pair<String, Map<Int, PluginBase>>>): Pair<List<PluginBase>, List<String>> {
-        val problems = mutableListOf<String>()
-        val merged = LinkedHashMap<Int, PluginBase>()
-        val owner = mutableMapOf<Int, String>()
-        for ((name, plugins) in sources) {
-            for ((key, plugin) in plugins) {
-                owner[key]?.let { problems += "order key $key used by both $it and $name (${plugin.javaClass.simpleName})" }
-                merged[key] = plugin
-                owner[key] = name
-            }
-        }
-        return merged.toList().sortedBy { it.first }.map { it.second } to problems
     }
 
     @Synchronized
@@ -307,9 +256,6 @@ object WatchEngine {
 
     /** Its own database file, so it is never taken for anything else on the watch. */
     private const val DATABASE_FILE = "aaps_engine.db"
-
-    /** As on the phone: a plugin that will not start must not hold the engine up for ever. */
-    private const val PLUGIN_START_WAIT_MS = 60_000L
 
     private const val PENDING_SNAPSHOT = "handover/pending_snapshot.zip"
     private const val RESTART_DELAY_MS = 2_000L

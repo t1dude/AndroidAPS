@@ -43,7 +43,9 @@ class WatchG7SourcePlugin(
         .mainType(PluginType.BGSOURCE)
         .pluginName(TextRef.Literal("Dexcom G7 (watch)"))
         .description(TextRef.Literal("The G7 readings the watch reads itself"))
-        .enforce(EnforcedState.Enabled),
+        .enforce(EnforcedState.Enabled)
+        // AAPS falls back to the default of each category; the phone's default source is not on the watch
+        .setDefault(),
     aapsLogger = aapsLogger,
     rh = rh,
     notificationManager = notificationManager

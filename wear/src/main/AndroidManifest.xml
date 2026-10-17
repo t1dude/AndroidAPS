@@ -1000,6 +1000,9 @@
             android:exported="false"
             android:taskAffinity=""
             android:theme="@style/WearAppCompatDark" />
+        <receiver
+            android:name=".medtrum.MedtrumWatchAlarmReceiver"
+            android:exported="false" />
         <!-- The phone's Medtrum service comes with the driver module. The watch never runs it. -->
         <service
             android:name="app.aaps.pump.medtrum.services.MedtrumService"

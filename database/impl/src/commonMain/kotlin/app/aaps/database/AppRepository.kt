@@ -310,10 +310,10 @@ class AppRepository internal constructor(
                     add("DELETE FROM snap.temporaryBasals WHERE timestamp + duration < ?" to listOf(since))
                     add("DELETE FROM snap.extendedBoluses WHERE timestamp + duration < ?" to listOf(since))
                     // ... and the last ones before it, which are what applies at its start
-                    keepLastBefore("profileSwitches", 3)
+                    keepLastBefore("profileSwitches", 3, alsoLastPermanent = true)
                     keepLastBefore("effectiveProfileSwitches", 3, end = "timestamp")
                     keepLastBefore("temporaryTargets", 5)
-                    keepLastBefore("runningModes", 5)
+                    keepLastBefore("runningModes", 5, alsoLastPermanent = true)
                     // Site, sensor and insulin changes are few, and the age of each is shown and used
                     keepLastBefore("therapyEvents", 50)
                     add("DELETE FROM snap.totalDailyDoses WHERE timestamp < ?" to listOf(dailyDosesSince))
@@ -334,11 +334,24 @@ class AppRepository internal constructor(
     /**
      * Deletes the records of [table] that ended before the window, except the last [count] that started
      * before it. [end] is how the table's end is worked out (a table without a duration ends at its start).
+     *
+     * With [alsoLastPermanent] the last permanent record (duration 0) before the window stays too, however
+     * many temporary ones follow it: a permanent profile switch or running mode is in force until the next
+     * permanent one, and the device that takes over looks it up. Found on the watch: three temporary
+     * profile switches after the permanent one, and the engine had no requested profile.
      */
-    private fun MutableList<Pair<String, List<Long>>>.keepLastBefore(table: String, count: Int, end: String = "timestamp + duration") {
+    private fun MutableList<Pair<String, List<Long>>>.keepLastBefore(
+        table: String,
+        count: Int,
+        end: String = "timestamp + duration",
+        alsoLastPermanent: Boolean = false
+    ) {
+        val permanent =
+            if (alsoLastPermanent) " AND id NOT IN (SELECT id FROM snap.$table WHERE duration = 0 AND timestamp < %since% ORDER BY timestamp DESC LIMIT 1)"
+            else ""
         add(
             "DELETE FROM snap.$table WHERE $end < %since% AND id NOT IN " +
-                "(SELECT id FROM snap.$table WHERE timestamp < %since% ORDER BY timestamp DESC LIMIT $count)" to emptyList()
+                "(SELECT id FROM snap.$table WHERE timestamp < %since% ORDER BY timestamp DESC LIMIT $count)" + permanent to emptyList()
         )
     }
 

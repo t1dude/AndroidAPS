@@ -35,6 +35,7 @@ import app.aaps.shared.impl.rx.AapsSchedulersImpl
 import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.shared.impl.sharedPreferences.SPImpl
 import app.aaps.shared.impl.utils.DateUtilImpl
+import app.aaps.wear.engine.EngineTeeLogger
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.ContributesTo
@@ -50,6 +51,7 @@ import kotlinx.coroutines.CoroutineScope
  *
  * - **Its own settings file.** The companion uses the default one; engine and companion settings must never
  *   mix (a phone settings import on the watch would otherwise change the companion too).
+ * - **Its logger copies the loop's lines and all warnings and errors to the test log** ([EngineTeeLogger]).
  */
 @ContributesTo(AppScope::class)
 @BindingContainer
@@ -85,7 +87,7 @@ object EngineBindings {
 
     @Provides
     @SingleIn(AppScope::class)
-    fun aapsLogger(l: L): AAPSLogger = AAPSLoggerProduction(l)
+    fun aapsLogger(l: L, context: Context): AAPSLogger = EngineTeeLogger(AAPSLoggerProduction(l), context)
 
     @Provides
     @SingleIn(AppScope::class)

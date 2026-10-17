@@ -12,9 +12,9 @@ android {
 }
 
 // Which module owns which string names, as `:app` generates it for the phone (see StringOwnerModules).
-// Without it a plugin's name shows as its string key. Only the modules the engine has.
+// Without it a plugin's name shows as its string key.
 val generateEngineStringOwners = tasks.register<GenerateStringOwnerRegistryTask>("generateEngineStringOwners") {
-    owners.set(StringOwnerModules.ALL.filter { it.owner != "calibration" })
+    owners.set(StringOwnerModules.ALL)
     packageName.set("app.aaps.wear.engine.di")
     objectName.set("EngineStringOwners")
     useResourceIds.set(true)
@@ -47,6 +47,8 @@ dependencies {
     implementation(project(":ui"))
 
     implementation(project(":plugins:aps"))
+    // AAPS needs a plugin in every category, calibration too (its default does nothing)
+    implementation(project(":plugins:calibration"))
     implementation(project(":plugins:configuration"))
     implementation(project(":plugins:constraints"))
     implementation(project(":plugins:main"))
@@ -67,4 +69,8 @@ dependencies {
     implementation(libs.androidx.wear.compose.foundation)
 
     testImplementation(project(":shared:tests"))
+    // The engine's start runs on a real graph in Robolectric (EngineStartTest). A JUnit4 runner, bridged onto
+    // the JUnit Platform by the vintage engine, as in :wear.
+    testImplementation(libs.org.robolectric)
+    testRuntimeOnly(libs.org.junit.vintage.engine)
 }

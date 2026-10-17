@@ -1,5 +1,6 @@
 package app.aaps.plugins.sync.wear.wearintegration
 
+import android.net.Uri
 import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
@@ -12,6 +13,7 @@ import app.aaps.core.interfaces.resources.ResourceHelper
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventMobileToWear
+import app.aaps.core.interfaces.rx.events.EventMobileToWearFile
 import app.aaps.core.interfaces.rx.events.EventMobileToWearWatchface
 import app.aaps.core.interfaces.rx.events.EventWearUpdateGui
 import app.aaps.core.interfaces.rx.weardata.EventData
@@ -37,6 +39,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.ExperimentalSerializationApi
+import java.io.File
 
 class DataLayerListenerServiceMobile : WearableListenerService() {
 
@@ -55,6 +58,7 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
 
     private val dataClient by lazy { Wearable.getDataClient(this) }
     private val messageClient by lazy { Wearable.getMessageClient(this) }
+    private val channelClient by lazy { Wearable.getChannelClient(this) }
     private val capabilityClient by lazy { Wearable.getCapabilityClient(this) }
     //private val nodeClient by lazy { Wearable.getNodeClient(this) }
 
@@ -80,6 +84,10 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         rxBus.toFlow(EventMobileToWearWatchface::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
                 withContext(Dispatchers.IO) { sendMessage(rxWatchfacePath, it.payload) }
+            }
+        rxBus.toFlow(EventMobileToWearFile::class)
+            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
+                withContext(Dispatchers.IO) { sendFile(it.path, it.channelPath) }
             }
     }
 
@@ -177,6 +185,29 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
                         aapsLogger.debug(LTag.WEAR, "sendMessage:  $path failure")
                     }
                 }
+        }
+    }
+
+    /**
+     * Sends a file to the watch over a Wear channel, for what is too big for a message (the handover
+     * snapshot). The watch receives it whole or not at all: it acts on it only when the channel closed
+     * normally.
+     */
+    private suspend fun sendFile(path: String, channelPath: String) {
+        val file = File(path)
+        val nodeId = transcriptionNodeId
+        if (nodeId == null) {
+            aapsLogger.error(LTag.WEAR, "sendFile: no watch connected, $channelPath not sent")
+            return
+        }
+        try {
+            val channel = channelClient.openChannel(nodeId, channelPath).await()
+            channelClient.sendFile(channel, Uri.fromFile(file)).await()
+            aapsLogger.debug(LTag.WEAR, "sendFile: $channelPath ${file.length()} bytes started")
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (exception: Exception) {
+            aapsLogger.error(LTag.WEAR, "sendFile: $channelPath failed", exception)
         }
     }
 

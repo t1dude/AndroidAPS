@@ -1,14 +1,24 @@
 package app.aaps.wear.engine
 
+import android.app.AlarmManager
+import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
+import android.os.Process
+import android.util.Log
 import app.aaps.core.data.model.GV
+import app.aaps.core.data.model.RM
+import app.aaps.core.data.ue.Action
+import app.aaps.core.data.ue.Sources
 import app.aaps.core.interfaces.di.MetroMemberInjector
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.LTag
+import app.aaps.core.interfaces.maintenance.Prefs
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.rx.events.EventAppInitialized
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.objects.di.CoreObjectsGraph
+import app.aaps.database.DATABASE_VERSION
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
@@ -18,14 +28,18 @@ import app.aaps.wear.engine.di.EngineStringOwners
 import app.aaps.wear.engine.medtrum.MedtrumWatchActivity
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.createGraphFactory
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
+import java.util.zip.ZipInputStream
 
 /**
  * The engine's entry point for the rest of the watch app (the companion).
@@ -51,8 +65,42 @@ object WatchEngine {
         this.memberInjector = memberInjector
         this.buildInfo = buildInfo
         this.companion = companion
-        // The watch held a pump session when the app stopped: carry on with it
-        if (hasSession()) start { it.medtrumWatchLink.start() }
+        // A snapshot came while the engine ran, and the app restarted for it: start from the snapshot
+        val snapshot = importPendingSnapshot()
+        when {
+            snapshot != null -> startFromSnapshot(snapshot)
+            // The watch held a pump session when the app stopped: carry on with it
+            hasSession()     -> start { it.medtrumWatchLink.start() }
+        }
+    }
+
+    /**
+     * The handover snapshot arrived from the phone (see `HandoverSnapshot`): the cut down database, the
+     * settings and the pump session. The engine starts from it. When the engine already runs in this
+     * process, its database is open and its plugins started, so the app restarts once and takes the
+     * snapshot in at the start (see [install]).
+     */
+    fun onSnapshot(received: File) {
+        val pending = pendingSnapshotFile()
+        pending.parentFile?.mkdirs()
+        pending.delete()
+        if (!received.renameTo(pending)) {
+            received.copyTo(pending, overwrite = true)
+            received.delete()
+        }
+        if (graph != null) restartApp("a snapshot arrived while the engine ran")
+        else importPendingSnapshot()?.let { startFromSnapshot(it) }
+    }
+
+    /**
+     * The watch handed the pump back. The engine stops with the app process, which restarts at once without
+     * it (there is no session any more). A moment later, so the hand back message is sent first.
+     */
+    fun afterHandback() {
+        graph?.appScope?.launch {
+            delay(HANDBACK_RESTART_DELAY_MS)
+            restartApp("the pump was handed back")
+        }
     }
 
     /** True while the engine holds a pump session. Reads the settings file only. */
@@ -88,6 +136,84 @@ object WatchEngine {
         graph?.appScope?.launch { graph.watchG7Source.store(readings) }
     }
 
+    private class Snapshot(val settings: Map<String, String>, val pumpSession: String)
+
+    private fun pendingSnapshotFile() = File(context.filesDir, PENDING_SNAPSHOT)
+
+    /**
+     * Unpacks a waiting snapshot: its database becomes the engine's database (before anything opens it),
+     * its settings and pump session are returned to be applied at the start. A snapshot from another
+     * database version is refused: the engine could not open it.
+     */
+    private fun importPendingSnapshot(): Snapshot? {
+        val file = pendingSnapshotFile()
+        if (!file.exists()) return null
+        try {
+            val entries = mutableMapOf<String, ByteArray>()
+            ZipInputStream(file.inputStream().buffered()).use { zip ->
+                generateSequence { zip.nextEntry }.forEach { entries[it.name] = zip.readBytes() }
+            }
+            val manifest = HandoverSnapshot.decodeLines(entries[HandoverSnapshot.MANIFEST]?.decodeToString().orEmpty())
+            val version = manifest[HandoverSnapshot.KEY_DATABASE_VERSION]?.toIntOrNull()
+            if (version != DATABASE_VERSION) {
+                Log.e(TAG, "Handover snapshot refused: database version $version, the engine has $DATABASE_VERSION. Build the phone and the watch from the same code.")
+                return null
+            }
+            val database = entries[HandoverSnapshot.DATABASE] ?: run {
+                Log.e(TAG, "Handover snapshot refused: no database in it")
+                return null
+            }
+            val target = context.getDatabasePath(DATABASE_FILE)
+            target.parentFile?.mkdirs()
+            listOf("", "-wal", "-shm", "-journal").forEach { File(target.path + it).delete() }
+            target.writeBytes(database)
+            Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}")
+            return Snapshot(
+                settings = HandoverSnapshot.decodeLines(entries[HandoverSnapshot.SETTINGS]?.decodeToString().orEmpty()),
+                pumpSession = entries[HandoverSnapshot.PUMP_SESSION]?.decodeToString().orEmpty()
+            )
+        } catch (e: Exception) {
+            Log.e(TAG, "Handover snapshot could not be read", e)
+            return null
+        } finally {
+            file.delete()
+        }
+    }
+
+    /**
+     * Starts the engine from a snapshot: the phone's settings go in before the plugins start, keeping the
+     * engine's own pump choice (the virtual pump while the engine is tested). Then the pump session, and the
+     * loop in open loop: it suggests, it does not dose.
+     */
+    private fun startFromSnapshot(snapshot: Snapshot) {
+        start(settings = snapshot.settings) { graph ->
+            graph.medtrumWatchLink.start()
+            if (snapshot.pumpSession.isNotEmpty()) graph.medtrumWatchLink.receiveSession(snapshot.pumpSession)
+            graph.appScope.launch { runCatching { openLoop(graph) }.onFailure { graph.aapsLogger.error(LTag.CORE, "Engine: open loop failed", it) } }
+        }
+    }
+
+    private suspend fun openLoop(graph: EngineGraph) {
+        val profile = graph.profileFunction.getProfile()
+        if (profile == null) {
+            graph.aapsLogger.warn(LTag.CORE, "Engine: no profile in the snapshot, the loop stays as it was")
+            graph.medtrumWatchLink.note("Engine: no profile in the snapshot, the loop stays as it was")
+            return
+        }
+        val done = graph.loop.handleRunningModeChange(RM.Mode.OPEN_LOOP, Action.OPEN_LOOP_MODE, Sources.Aaps, profile = profile)
+        graph.aapsLogger.info(LTag.CORE, "Engine: open loop ${if (done) "set" else "could not be set"}")
+        graph.medtrumWatchLink.note("Engine: profile ${graph.profileFunction.getProfileName()}, open loop ${if (done) "set" else "could not be set"}")
+    }
+
+    /** Stops the app process and starts it again a moment later (the alarm brings it back). */
+    private fun restartApp(reason: String) {
+        Log.i(TAG, "Restarting the watch app: $reason")
+        val intent = PendingIntent.getBroadcast(context, 0, Intent(context, EngineRestartReceiver::class.java), PendingIntent.FLAG_IMMUTABLE)
+        context.getSystemService(AlarmManager::class.java)
+            .setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + RESTART_DELAY_MS, intent)
+        Process.killProcess(Process.myPid())
+    }
+
     /** Fills the fields of an engine class that Android built (screen, service, receiver, worker). */
     @Suppress("UNCHECKED_CAST")
     fun injectMembers(target: Any): Boolean {
@@ -100,34 +226,54 @@ object WatchEngine {
      * Starts the engine once, as `MainApp` starts the phone: the plugin list, then the plugins the settings
      * enable, then the running mode check. [then] runs after that, on the engine's scope.
      */
-    private fun start(then: (EngineGraph) -> Unit) {
+    private fun start(settings: Map<String, String>? = null, then: (EngineGraph) -> Unit) {
         val graph = graph()
         graph.appScope.launch {
-            startMutex.withLock {
-                if (!started) {
-                    EngineStringOwners.registerAll()
-                    graph.resourceHelperImpl.start()
-                    val (plugins, problems) = mergePlugins(
-                        listOf(
-                            "Metro" to graph.contributedPlugins,
-                            "Metro @APS" to graph.contributedApsPlugins,
-                            "Metro @PumpDriver" to graph.contributedPumpDriverPlugins,
-                            "Metro @NotNSClient" to graph.contributedNotNsClientPlugins
+            // The engine must never take the watch app down: a failure is logged and the companion goes on
+            try {
+                startMutex.withLock {
+                    if (!started) {
+                        EngineStringOwners.registerAll()
+                        graph.resourceHelperImpl.start()
+                        if (settings != null) {
+                            val outcome = graph.preferenceImportApplier.apply(Prefs(settings, emptyMap()), keepPumpSettings = true)
+                            graph.aapsLogger.info(LTag.CORE, "Engine: phone settings applied: $outcome")
+                            graph.medtrumWatchLink.note("Engine: ${settings.size} phone settings taken in")
+                        }
+                        val (plugins, problems) = mergePlugins(
+                            listOf(
+                                "Metro" to graph.contributedPlugins,
+                                "Metro @APS" to graph.contributedApsPlugins,
+                                "Metro @PumpDriver" to graph.contributedPumpDriverPlugins,
+                                "Metro @NotNSClient" to graph.contributedNotNsClientPlugins
+                            )
                         )
-                    )
-                    problems.forEach { graph.aapsLogger.error(LTag.CORE, "Engine plugin list: $it") }
-                    graph.pluginStore.plugins = EnginePlugins.forWatch(plugins)
-                    val pluginsStarted = graph.configBuilder.initialize()
-                    if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
-                        graph.aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")
-                    graph.runningModeReconciler.start()
-                    graph.config.initCompleted()
-                    graph.rxBus.send(EventAppInitialized())
-                    graph.aapsLogger.info(LTag.CORE, "Engine started with ${graph.pluginStore.plugins.size} plugins")
-                    started = true
+                        problems.forEach { graph.aapsLogger.error(LTag.CORE, "Engine plugin list: $it") }
+                        graph.pluginStore.plugins = EnginePlugins.forWatch(plugins)
+                        val pluginsStarted = graph.configBuilder.initialize()
+                        if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
+                            graph.aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")
+                        graph.runningModeReconciler.start()
+                        graph.config.initCompleted()
+                        graph.rxBus.send(EventAppInitialized())
+                        graph.aapsLogger.info(LTag.CORE, "Engine started with ${graph.pluginStore.plugins.size} plugins")
+                        // A line for the test log only: it must never stop the start
+                        val pump = runCatching { graph.activePlugin.activePump.javaClass.simpleName }.getOrDefault("none")
+                        val glucose = runCatching { graph.activePlugin.activeBgSource.javaClass.simpleName }.getOrDefault("none")
+                        graph.medtrumWatchLink.note(
+                            "Engine started: ${graph.pluginStore.plugins.count { it.isEnabled() }} of ${graph.pluginStore.plugins.size} plugins on, pump $pump, glucose $glucose"
+                        )
+                        graph.engineReporter.start()
+                        started = true
+                    }
                 }
+                then(graph)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                graph.aapsLogger.error(LTag.CORE, "Engine: start failed", e)
+                runCatching { graph.medtrumWatchLink.note("Engine: start failed: ${e.javaClass.simpleName} ${e.message}") }
             }
-            then(graph)
         }
     }
 
@@ -164,6 +310,11 @@ object WatchEngine {
 
     /** As on the phone: a plugin that will not start must not hold the engine up for ever. */
     private const val PLUGIN_START_WAIT_MS = 60_000L
+
+    private const val PENDING_SNAPSHOT = "handover/pending_snapshot.zip"
+    private const val RESTART_DELAY_MS = 2_000L
+    private const val HANDBACK_RESTART_DELAY_MS = 5_000L
+    private const val TAG = "AAPS-Engine"
 
     private val startMutex = Mutex()
     @Volatile private var started = false

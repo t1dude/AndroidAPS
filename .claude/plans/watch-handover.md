@@ -139,6 +139,17 @@ that needs many changes inside the phone app, which Tim avoided on purpose.
   battery, a steady cycle over a night). Then the Medtrum session is taken into the engine's own
   Medtrum plugin, exactly as phone B did in T1, open loop first. Then low glucose suspend, then closed
   loop (Phase 4). The Medtrum test screen moves into the engine until the engine replaces it.
+- **The handover snapshot (built 2026-10-17)**: one zip, sent over a Wear channel (a message is limited
+  to about 100 KB). It holds a copy of the phone's database made with `VACUUM INTO` and cut down in SQL
+  (`AppRepository.writeHandoverSnapshot`): 30 h of records, what is in force at the start of the window (a
+  running temp basal, the last profile switches, temp targets and running modes), 8 days of daily doses, no
+  APS results, device status, user entries or food. With it go the phone's exportable settings (as in a
+  settings export, so no tokens or device addresses) and the pump session. The watch refuses a snapshot of
+  another database version. The engine opens the copy as its own database, applies the settings with the
+  phone's `PreferenceImportApplier` (keeping its own pump choice), takes the session and starts in open
+  loop. If the engine already runs, the app restarts once to take it in; it restarts at hand back too, so
+  the engine stops. The engine writes its start and every loop run (with the battery level) to the test
+  log that reaches the phone.
 
 - New module (working name `:watchapp`): the wear companion UI plus the AAPS engine. Installed instead
   of `:wear` on handover-capable watches only (Android 12+, minSdk 31). `:wear` stays as it is for

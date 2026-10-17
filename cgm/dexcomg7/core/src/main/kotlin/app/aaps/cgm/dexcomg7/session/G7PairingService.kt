@@ -14,9 +14,6 @@ import app.aaps.cgm.dexcomg7.protocol.G7LinkException
 import app.aaps.cgm.dexcomg7.protocol.G7PairingPlanner
 import app.aaps.cgm.dexcomg7.protocol.G7SensorModel
 import app.aaps.cgm.dexcomg7.protocol.toHex
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -60,8 +57,7 @@ sealed class G7PairingState {
  * straight to [G7Session], so the first reading comes at once.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@SingleIn(AppScope::class)
-@Inject
+// One per app, built and scoped where it is bound: G7CoreBindings on the phone, WearG7Bindings on the watch
 class G7PairingService(
     private val context: Context,
     private val bluetooth: G7Bluetooth,

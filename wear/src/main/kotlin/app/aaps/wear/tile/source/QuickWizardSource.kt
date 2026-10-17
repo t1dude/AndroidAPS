@@ -7,15 +7,15 @@ import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.interaction.actions.BackgroundActionActivity
 import app.aaps.wear.tile.Action
 import app.aaps.wear.tile.TileSource
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import java.util.Calendar
 
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class QuickWizardSource(private val context: Context, private val sp: SP, private val aapsLogger: AAPSLogger) : TileSource {
 

@@ -17,6 +17,8 @@ import app.aaps.cgm.dexcomg7.protocol.G7DisplayType
 import app.aaps.cgm.dexcomg7.session.G7ConnectionStatus
 import app.aaps.cgm.dexcomg7.session.G7Reading
 import app.aaps.cgm.dexcomg7.session.G7Session
+import app.aaps.core.data.model.GV
+import app.aaps.core.data.model.SourceSensor
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.bus.RxBus
@@ -25,7 +27,8 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.R
 import app.aaps.wear.comm.DataHandlerWear
 import app.aaps.wear.data.ComplicationDataRepository
-import dev.zacsweers.metro.AppScope
+import app.aaps.wear.di.WearScope
+import app.aaps.wear.handover.WatchEngineHook
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
@@ -52,7 +55,7 @@ import kotlinx.coroutines.launch
  * the phone has sent nothing for [G7WatchReadings.PHONE_SILENT_MS].
  */
 @OptIn(FlowPreview::class)
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class G7WatchDirect(
     private val context: Context,
@@ -227,6 +230,8 @@ class G7WatchDirect(
         }
         val live = usable.lastOrNull { !it.fromBackfill }
         dataHandler.showSensorReadings(live?.let { built[usable.indexOf(it)] }, built)
+        // Handover: while the watch holds the pump, the engine runs its loop on these readings
+        WatchEngineHook.onGlucose(usable.map { GV(timestamp = it.timestamp, value = it.clampedGlucose!!.toDouble(), raw = null, noise = null, trendArrow = it.trendArrow, sourceSensor = SourceSensor.DEXCOM_G7) })
         live?.let { checkLow(built[usable.indexOf(it)]) }
     }
 

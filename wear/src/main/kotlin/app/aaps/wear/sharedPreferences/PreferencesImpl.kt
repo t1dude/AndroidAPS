@@ -34,14 +34,14 @@ import app.aaps.core.keys.interfaces.StringComposedNonPreferenceKey
 import app.aaps.core.keys.interfaces.StringNonPreferenceKey
 import app.aaps.core.keys.interfaces.StringPreferenceKey
 import app.aaps.core.keys.interfaces.UnitDoublePreferenceKey
-import dev.zacsweers.metro.AppScope
+import app.aaps.wear.di.WearScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import java.util.concurrent.ConcurrentHashMap
 
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class PreferencesImpl(
     private val sp: SP

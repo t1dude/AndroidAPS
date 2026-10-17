@@ -13,8 +13,8 @@ import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ResFileMap
 import app.aaps.wear.R
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.g7.G7WatchReadings
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.Flow
@@ -36,7 +36,7 @@ import java.io.OutputStream
  * - Reactive updates via Flow
  *
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class ComplicationDataRepository(
     private val context: Context,

@@ -19,7 +19,7 @@ import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.R
-import dev.zacsweers.metro.AppScope
+import app.aaps.wear.di.WearScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
@@ -37,7 +37,7 @@ import kotlinx.coroutines.SupervisorJob
  * Acknowledge (the button, or swiping the notification away) goes back to the phone, which then
  * acknowledges the alarm there too.
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class CgmAlarmWear(
     private val context: Context,

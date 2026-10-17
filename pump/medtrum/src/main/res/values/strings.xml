@@ -151,8 +151,11 @@
     <!-- Handover test (phase 0): move a running patch session to another phone and back -->
     <string name="handover_test_move_out">Move patch session out (test)</string>
     <string name="handover_test_take_in">Take patch session in (test)</string>
-    <string name="handover_test_move_out_confirm">The running patch session is written to a file in the AAPS exports folder, and this phone stops talking to the patch until you take a session back in.\n\nBefore you go on: no bolus running, the loop off or suspended on both phones, and the other phone has the same AAPS build with Medtrum selected and no patch of its own.\n\nThe file lets any phone control the patch. Delete it after the test.</string>
+    <string name="handover_test_move_out_confirm">The running patch session is written to a file in the AAPS exports folder, and this phone stops talking to the patch until you take a session back in.\n\nThe loop on this phone is turned off (Disable loop). Before you go on: no bolus running, the loop off on the other phone too, and the other phone has the same AAPS build with Medtrum selected and no patch of its own.\n\nThe file lets any phone control the patch. Delete it after the test.</string>
     <string name="handover_test_take_in_confirm">This phone takes in the newest patch session file from its AAPS exports folder and then talks to that patch.\n\nOnly do this after the other phone has moved the session out. Two phones must never talk to the patch at the same time.\n\nAfter it: only use Refresh (status reads) until the test is over.</string>
+    <string name="handover_test_loop_disabled" comment="%1$s=the running mode before, for example Closed Loop">The loop was turned off (Disable loop). It was: %1$s. You will be asked to turn it back on when this phone takes a session back in.</string>
+    <string name="handover_test_loop_not_disabled">The loop could not be turned off. Turn it off yourself (Disable loop) before you go on.</string>
+    <string name="handover_test_restore_mode" comment="%1$s=what happened (a whole message), %2$s=the running mode, for example Closed Loop">%1$s\n\nTurn the loop back on as %2$s?</string>
     <string name="handover_test_banner">The patch session was moved to another device. This phone does not talk to the patch.</string>
     <string name="handover_test_no_patch">There is no patch session on this phone to move out.</string>
     <string name="handover_test_already_moved">The patch session was already moved out.</string>

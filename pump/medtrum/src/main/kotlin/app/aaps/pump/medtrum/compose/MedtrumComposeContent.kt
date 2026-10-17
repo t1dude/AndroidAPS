@@ -53,6 +53,7 @@ class MedtrumComposeContent(
         var showUnpairConfirm by remember { mutableStateOf(false) }
         var showMoveOutConfirm by remember { mutableStateOf(false) }
         var showTakeInConfirm by remember { mutableStateOf(false) }
+        var restoreOffer by remember { mutableStateOf<MedtrumOverviewEvent.OfferRestoreMode?>(null) }
 
         // Toolbar configuration
         val overviewNavIcon: @Composable () -> Unit = {
@@ -105,6 +106,7 @@ class MedtrumComposeContent(
                     is MedtrumOverviewEvent.ConfirmUnpair      -> showUnpairConfirm = true
                     is MedtrumOverviewEvent.ConfirmMoveSessionOut -> showMoveOutConfirm = true
                     is MedtrumOverviewEvent.ConfirmTakeSessionIn  -> showTakeInConfirm = true
+                    is MedtrumOverviewEvent.OfferRestoreMode      -> restoreOffer = event
                 }
             }
         }
@@ -150,6 +152,21 @@ class MedtrumComposeContent(
                     overviewViewModel.performTakeSessionIn()
                 },
                 onDismiss = { showTakeInConfirm = false }
+            )
+        }
+
+        restoreOffer?.let { offer ->
+            OkCancelDialog(
+                title = offer.title,
+                message = stringResource(MedtrumR.string.handover_test_restore_mode, offer.message, offer.modeName),
+                onConfirm = {
+                    restoreOffer = null
+                    overviewViewModel.restoreMode(offer.mode)
+                },
+                onDismiss = {
+                    restoreOffer = null
+                    overviewViewModel.keepLoopOff()
+                }
             )
         }
 

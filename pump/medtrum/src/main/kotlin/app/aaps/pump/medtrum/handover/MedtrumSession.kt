@@ -42,10 +42,14 @@ data class MedtrumSession(val exportedAt: Long, val values: Map<String, String>)
         const val HEADER = "medtrum-session-1"
         const val FILE_PREFIX = "Medtrum_session_"
 
-        /** Everything that is moved. [MedtrumBooleanNonKey.SessionMovedAway] is about this device, not the patch. */
+        /**
+         * Everything that is moved. [MedtrumBooleanNonKey.SessionMovedAway] and [MedtrumStringNonKey.ModeBeforeMoveOut]
+         * are about this device, not the patch.
+         */
         val keys: List<NonPreferenceKey> =
             (MedtrumBooleanNonKey.entries - MedtrumBooleanNonKey.SessionMovedAway) +
-                MedtrumDoubleNonKey.entries + MedtrumIntNonKey.entries + MedtrumLongNonKey.entries + MedtrumStringNonKey.entries +
+                MedtrumDoubleNonKey.entries + MedtrumIntNonKey.entries + MedtrumLongNonKey.entries +
+                (MedtrumStringNonKey.entries - MedtrumStringNonKey.ModeBeforeMoveOut) +
                 MedtrumBooleanKey.entries + MedtrumIntKey.entries + MedtrumStringKey.entries
 
         fun read(preferences: Preferences, now: Long): MedtrumSession =

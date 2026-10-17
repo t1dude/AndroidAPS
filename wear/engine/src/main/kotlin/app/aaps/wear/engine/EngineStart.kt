@@ -13,19 +13,14 @@ import kotlinx.coroutines.withTimeoutOrNull
 private const val PLUGIN_START_WAIT_MS = 60_000L
 
 /**
- * Starts the engine, as `MainApp` starts the phone: the phone's [settings] if a snapshot brought them (keeping
- * the engine's own pump), the plugin list without what the watch does not run, the plugins the settings
+ * Starts the engine, as `MainApp` starts the phone: the plugin list without what the watch does not run, the
+ * phone's [settings] if a snapshot brought them (keeping the engine's own pump), the plugins the settings
  * enable, then the running mode check. Called once per process by `WatchEngine`; kept here so a test can run
  * the same start on a graph of its own.
  */
 internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?) {
     EngineStringOwners.registerAll()
     resourceHelperImpl.start()
-    if (settings != null) {
-        val outcome = preferenceImportApplier.apply(Prefs(settings, emptyMap()), keepPumpSettings = true)
-        aapsLogger.info(LTag.CORE, "Engine: phone settings applied: $outcome")
-        medtrumWatchLink.note("Engine: ${settings.size} phone settings taken in")
-    }
     val (plugins, problems) = mergePlugins(
         listOf(
             "Metro" to contributedPlugins,
@@ -36,6 +31,13 @@ internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?) {
     )
     problems.forEach { aapsLogger.error(LTag.CORE, "Engine plugin list: $it") }
     pluginStore.plugins = EnginePlugins.forWatch(plugins)
+    // After the plugin list, which the import reads to find each setting's key; before the plugins start,
+    // so they start with the phone's choices
+    if (settings != null) {
+        val outcome = preferenceImportApplier.apply(Prefs(settings, emptyMap()), keepPumpSettings = true)
+        aapsLogger.info(LTag.CORE, "Engine: phone settings applied: $outcome")
+        medtrumWatchLink.note("Engine: ${settings.size} phone settings taken in")
+    }
     val pluginsStarted = configBuilder.initialize()
     if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
         aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")

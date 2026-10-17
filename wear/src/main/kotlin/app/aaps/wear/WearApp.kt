@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
+import androidx.work.Configuration
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.di.injectMetroMembers
 import app.aaps.core.interfaces.logging.AAPSLogger
@@ -27,7 +28,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class WearApp : Application(), MetroMemberInjector {
+class WearApp : Application(), MetroMemberInjector, Configuration.Provider {
+
+    /**
+     * WorkManager is only used by the AAPS engine (its keep alive and the other phone workers), and those are
+     * built by the engine's factory. WorkManagerInitializer is removed in the manifest so this one is used.
+     */
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().apply { WatchEngineHook.workerFactory()?.let { setWorkerFactory(it) } }.build()
+
 
     /** Built once, on first use, because Android constructs this class before anything can be injected. */
     private val graph: WearGraph by lazy { createGraphFactory<WearGraph.Factory>().create(this) }

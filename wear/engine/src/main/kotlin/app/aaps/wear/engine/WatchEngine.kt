@@ -6,6 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Process
 import android.util.Log
+import androidx.work.WorkManager
 import app.aaps.core.data.model.GV
 import app.aaps.core.data.model.RM
 import app.aaps.core.data.ue.Action
@@ -15,6 +16,7 @@ import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.objects.di.CoreObjectsGraph
+import app.aaps.core.objects.workflow.MetroWorkerCreator
 import app.aaps.database.DATABASE_VERSION
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
@@ -61,6 +63,8 @@ object WatchEngine {
         this.companion = companion
         // A snapshot came while the engine ran, and the app restarted for it: start from the snapshot
         val snapshot = importPendingSnapshot()
+        // No session and no snapshot: the engine does not run, and neither may its scheduled work
+        if (snapshot == null && !hasSession()) WorkManager.getInstance(this.context).cancelAllWork()
         when {
             snapshot != null -> startFromSnapshot(snapshot)
             // The watch held a pump session when the app stopped: carry on with it
@@ -92,6 +96,8 @@ object WatchEngine {
      */
     fun afterHandback() {
         graph?.appScope?.launch {
+            // The keep alive and the other engine work stop with the engine
+            WorkManager.getInstance(context).cancelAllWork()
             delay(HANDBACK_RESTART_DELAY_MS)
             restartApp("the pump was handed back")
         }
@@ -127,7 +133,10 @@ object WatchEngine {
     fun onGlucose(readings: List<GV>) {
         if (!started) return
         val graph = graph
-        graph?.appScope?.launch { graph.watchG7Source.store(readings) }
+        graph?.appScope?.launch {
+            graph.watchG7Source.store(readings)
+            readings.maxByOrNull { it.timestamp }?.let { graph.engineReporter.onReadingStored(it.timestamp, it.value) }
+        }
     }
 
     private class Snapshot(val settings: Map<String, String>, val pumpSession: String)
@@ -210,6 +219,15 @@ object WatchEngine {
         context.getSystemService(AlarmManager::class.java)
             .setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, System.currentTimeMillis() + RESTART_DELAY_MS, intent)
         Process.killProcess(Process.myPid())
+    }
+
+    /**
+     * The creator of an engine worker, for [EngineWorkerFactory]. Null when the engine neither runs nor holds
+     * a session: its work is cancelled then, and a worker that still comes must not build the engine.
+     */
+    fun workerCreator(className: String): MetroWorkerCreator? {
+        if (graph == null && !hasSession()) return null
+        return graph().workerCreators.entries.firstOrNull { it.key.java.name == className }?.value
     }
 
     /** Fills the fields of an engine class that Android built (screen, service, receiver, worker). */

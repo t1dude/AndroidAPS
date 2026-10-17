@@ -31,6 +31,7 @@ import app.aaps.pump.medtrum.handover.MedtrumSession
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.wear.engine.CompanionLink
+import app.aaps.wear.engine.EngineTestLog
 import app.aaps.wear.engine.R
 import app.aaps.wear.engine.WatchEngine
 import dev.zacsweers.metro.AppScope
@@ -49,7 +50,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
-import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -116,8 +116,6 @@ class MedtrumWatchLink(
 
     /** Survives a restart of the app, so reads every 5 minutes go on after one. */
     private val state by lazy { context.getSharedPreferences(STATE_FILE, Context.MODE_PRIVATE) }
-    private val logFile by lazy { File(context.filesDir, LOG_FILE) }
-    private val logLock = Any()
 
     @Volatile private var connected: CompletableDeferred<Boolean>? = null
     @Volatile private var pending: Pending? = null
@@ -453,31 +451,19 @@ class MedtrumWatchLink(
 
     private fun log(text: String) {
         aapsLogger.info(LTag.PUMPCOMM, "Medtrum watch test: $text")
-        val line = "${dateTime(System.currentTimeMillis())} $text"
-        synchronized(logLock) {
-            runCatching {
-                logFile.appendText(line + "\n")
-                if (logFile.length() > LOG_FILE_MAX_BYTES) logFile.writeText(logFile.readText().takeLast(LOG_FILE_KEEP_CHARS))
-            }.onFailure { aapsLogger.error(LTag.PUMPCOMM, "Medtrum watch test: writing the log failed", it) }
-        }
+        val line = EngineTestLog.append(context, text)
         _status.update { it.copy(log = (it.log + line).takeLast(SCREEN_LINES)) }
     }
 
-    private fun tailLines(): List<String> = synchronized(logLock) {
-        runCatching { if (logFile.exists()) logFile.readLines().takeLast(SCREEN_LINES) else emptyList() }.getOrDefault(emptyList())
-    }
+    private fun tailLines(): List<String> = EngineTestLog.lastLines(context, SCREEN_LINES)
 
     /** The newest part of the log: a message to the phone may not be much larger. */
-    private fun logForPhone(): String = synchronized(logLock) {
-        runCatching { if (logFile.exists()) logFile.readText().takeLast(PHONE_LOG_CHARS) else "" }.getOrDefault("")
-    }
+    private fun logForPhone(): String = EngineTestLog.newest(context, PHONE_LOG_CHARS)
 
     /** Two decimals in the log: "0.35", not "0.35000000000000003". */
     private fun num(value: Double): String = "%.2f".format(Locale.US, value)
 
     private fun time(at: Long): String = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date(at))
-
-    private fun dateTime(at: Long): String = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US).format(Date(at))
 
     private fun notifySessionReceived() {
         val manager = context.getSystemService(NotificationManager::class.java)
@@ -505,9 +491,6 @@ class MedtrumWatchLink(
 
         // A message to the phone is limited to about 100 KB
         private const val PHONE_LOG_CHARS = 80_000
-        private const val LOG_FILE_MAX_BYTES = 400_000L
-        private const val LOG_FILE_KEEP_CHARS = 200_000
-        private const val LOG_FILE = "medtrum_watch_test.log"
         private const val STATE_FILE = "medtrum_watch_test"
         private const val KEY_AUTO_READ = "auto_read"
         private const val KEY_NEXT_AT = "next_read_at"

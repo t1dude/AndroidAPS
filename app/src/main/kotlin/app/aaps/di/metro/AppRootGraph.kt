@@ -3,6 +3,7 @@ package app.aaps.di.metro
 import android.content.Context
 import android.content.SharedPreferences
 import androidx.work.WorkManager
+import app.aaps.core.interfaces.alerts.EatReminder
 import app.aaps.core.interfaces.alerts.LocalAlertUtils
 import app.aaps.core.interfaces.aps.APSResult
 import app.aaps.core.interfaces.aps.AutosensData
@@ -11,7 +12,7 @@ import app.aaps.core.interfaces.automation.Automation
 import app.aaps.core.interfaces.autotune.Autotune
 import app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck
 import app.aaps.core.interfaces.bolus.BatchExecutor
-import app.aaps.core.interfaces.bolus.WizardBolusExecutor
+import app.aaps.core.interfaces.bolus.MasterActionExecutor
 import app.aaps.core.interfaces.bolus.WizardExecutor
 import app.aaps.core.interfaces.clientcontrol.ClientControlActionDispatcher
 import app.aaps.core.interfaces.configuration.Config
@@ -311,7 +312,7 @@ interface AppRootGraph : MetroViewModelMultibindings {
     val cloudDirectoryManager: CloudDirectoryManager
     val graphConfigRepository: GraphConfigRepository
     val batchExecutor: BatchExecutor
-    val wizardBolusExecutor: WizardBolusExecutor
+    val masterActionExecutor: MasterActionExecutor
     val loggerUtils: LoggerUtils
     val importExportPrefs: ImportExportPrefs
     val preferences: Preferences
@@ -354,6 +355,7 @@ interface AppRootGraph : MetroViewModelMultibindings {
     val profileSwitchSilentGate: ProfileSwitchSilentGate
     val profileSwitchScheduler: ProfileSwitchScheduler
     val snackbarNotificationFallback: SnackbarNotificationFallback
+    val eatReminder: EatReminder
     val runningConfiguration: RunningConfiguration
     val runningConfigurationKeys: RunningConfigurationKeys
     val activePlugin: ActivePlugin

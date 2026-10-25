@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.DropdownMenu
@@ -18,7 +17,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PlainTooltip
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TooltipAnchorPosition
 import androidx.compose.material3.TooltipBox
@@ -38,6 +36,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.aaps.core.interfaces.navigation.ElementType
 import app.aaps.core.ui.CoreUiStrings
+import app.aaps.core.ui.compose.AapsFloatingToolbar
 import app.aaps.core.ui.compose.AapsTheme
 import app.aaps.core.ui.compose.icons.IcBolus
 import app.aaps.core.ui.compose.icons.IcCarbs
@@ -75,28 +74,23 @@ fun QuickLaunchToolbar(
 ) {
     if (items.isEmpty()) return
 
-    Surface(
-        shape = RoundedCornerShape(percent = 50),
+    AapsFloatingToolbar(
+        modifier = modifier.padding(horizontal = 16.dp),
         color = if (panelStyle) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh,
         shadowElevation = if (panelStyle) 2.dp else 6.dp,
         tonalElevation = if (panelStyle) 0.dp else 6.dp,
-        border = if (panelStyle) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null,
-        modifier = modifier.padding(horizontal = 16.dp)
+        border = if (panelStyle) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
     ) {
+        // The toolbar's padding is already taken off this width
         BoxWithConstraints(Modifier.height(itemSize)) {
             val itemSizePx = with(LocalDensity.current) { itemSize.toPx() }
-            val contentPaddingPx = with(LocalDensity.current) { 8.dp.toPx() }
-            val maxItems = ((constraints.maxWidth - contentPaddingPx) / itemSizePx).toInt()
-                .coerceAtLeast(1)
+            val maxItems = (constraints.maxWidth / itemSizePx).toInt().coerceAtLeast(1)
 
             val needsOverflow = items.size > maxItems
             val visibleItems = if (needsOverflow) items.take((maxItems - 1).coerceAtLeast(0)) else items
             val overflowItems = if (needsOverflow) items.drop((maxItems - 1).coerceAtLeast(0)) else emptyList()
 
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                modifier = Modifier.padding(horizontal = 4.dp)
-            ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
                 visibleItems.forEach { item ->
                     ToolbarIconButton(item, onActionClick, itemSize, iconSize)
                 }

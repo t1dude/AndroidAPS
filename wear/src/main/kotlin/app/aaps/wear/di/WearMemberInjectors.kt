@@ -15,6 +15,8 @@ import app.aaps.wear.complications.CobIconComplication
 import app.aaps.wear.complications.CobIobComplication
 import app.aaps.wear.complications.ComplicationTapActivity
 import app.aaps.wear.complications.CwfAmbientBgComplication
+import app.aaps.wear.complications.circle.GlucoseCircleAmbientComplication
+import app.aaps.wear.complications.circle.GlucoseCircleComplication
 import app.aaps.wear.complications.CwfAmbientStatusComplication
 import app.aaps.wear.complications.CwfImageComplication
 import app.aaps.wear.complications.IobDetailedComplication
@@ -27,6 +29,7 @@ import app.aaps.wear.complications.SgvComplicationExt1
 import app.aaps.wear.complications.SgvComplicationExt2
 import app.aaps.wear.complications.SgvLargeComplication
 import app.aaps.wear.complications.TargetComplication
+import app.aaps.wear.complications.ReservoirComplication
 import app.aaps.wear.complications.UploaderBatteryComplication
 import app.aaps.wear.complications.WallpaperDarkComplication
 import app.aaps.wear.complications.WallpaperGrayComplication
@@ -131,6 +134,18 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(BgGraphComplication::class)
     fun bindBgGraphComplication(injector: MembersInjector<BgGraphComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(GlucoseCircleComplication::class)
+    fun bindGlucoseCircleComplication(injector: MembersInjector<GlucoseCircleComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(GlucoseCircleAmbientComplication::class)
+    fun bindGlucoseCircleAmbientComplication(injector: MembersInjector<GlucoseCircleAmbientComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors
@@ -473,6 +488,12 @@ object WearMemberInjectors {
     @IntoMap
     @ClassKey(UploaderBatteryComplication::class)
     fun bindUploaderBatteryComplication(injector: MembersInjector<UploaderBatteryComplication>): MembersInjector<*> = injector
+
+    @Provides
+    @FeatureMemberInjectors
+    @IntoMap
+    @ClassKey(ReservoirComplication::class)
+    fun bindReservoirComplication(injector: MembersInjector<ReservoirComplication>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Slot names in the watch face editor. The editor ignores a literal displayName on a
+     customizable slot, so they must be string resources. -->
+<resources>
+    <string name="dial_left">Left dial</string>
+    <string name="dial_right">Right dial</string>
+    <string name="edge_top_left">Edge, top left</string>
+    <string name="edge_top_right">Edge, top right</string>
+    <string name="edge_bottom_right">Edge, bottom right</string>
+    <string name="edge_bottom_left">Edge, bottom left</string>
+</resources>

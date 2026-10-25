@@ -141,6 +141,11 @@ internal class WearViewModelTest {
         // The complications face chosen instead: a loaded zip would not be shown
         pushedWatchfaceFlow.value = PushedWatchfaceId.WFS
         assertThat(sut.uiState.value.customWatchfaceSelected).isFalse()
+
+        // The glucose circle face has no place for a zip either
+        pushedWatchfaceFlow.value = PushedWatchfaceId.CIRCLE
+        assertThat(sut.uiState.value.selectedWatchface).isEqualTo(PushedWatchfaceId.CIRCLE)
+        assertThat(sut.uiState.value.customWatchfaceSelected).isFalse()
     }
 
     @Test

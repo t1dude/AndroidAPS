@@ -39,7 +39,8 @@ object HandoverSnapshot {
 
     /** One `name<TAB>value` per line, with tab, newline and backslash escaped. */
     fun encodeLines(values: Map<String, String>): String = buildString {
-        values.toSortedMap().forEach { (name, value) -> append(escape(name)).append('\t').append(escape(value)).append('\n') }
+        // Sorted by name, so the same values give the same text. toSortedMap() is JVM only.
+        values.entries.sortedBy { it.key }.forEach { (name, value) -> append(escape(name)).append('\t').append(escape(value)).append('\n') }
     }
 
     fun decodeLines(text: String): Map<String, String> =

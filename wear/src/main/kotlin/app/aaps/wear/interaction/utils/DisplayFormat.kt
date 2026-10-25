@@ -4,13 +4,13 @@ import android.content.Context
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.interaction.utils.Pair.Companion.create
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlin.math.max
 
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class DisplayFormat internal constructor(
     private val sp: SP,

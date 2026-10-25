@@ -4,9 +4,6 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.keys.interfaces.StringNonPreferenceKey
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -29,8 +26,7 @@ enum class G7StringNonKey(
  * Holds [G7State] in memory and in preferences. Every change is saved at once, because the key and
  * the sensor's address must survive the app being killed between two readings.
  */
-@SingleIn(AppScope::class)
-@Inject
+// One per app, built and scoped where it is bound: G7CoreBindings on the phone, WearG7Bindings on the watch
 class G7StateStore(
     private val preferences: Preferences,
     private val aapsLogger: AAPSLogger

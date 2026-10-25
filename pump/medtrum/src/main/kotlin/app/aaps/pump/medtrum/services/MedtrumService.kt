@@ -63,6 +63,7 @@ import app.aaps.pump.medtrum.comm.packets.StopPatchPacket
 import app.aaps.pump.medtrum.comm.packets.SubscribePacket
 import app.aaps.pump.medtrum.comm.packets.SynchronizePacket
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
+import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumIntKey
 import app.aaps.pump.medtrum.keys.MedtrumStringKey
 import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
@@ -135,9 +136,16 @@ class MedtrumService : MetroService(), MedtrumBleCallback {
             aapsLogger.debug(LTag.PUMPCOMM, "Serial number changed, reporting new pump!")
             medtrumPump.loadUserSettingsFromSP()
             medtrumPump.deviceType = MedtrumSnUtil().getDeviceTypeFromSerial(medtrumPump.pumpSN).value
-            medtrumPump.resetPatchParameters()
-            pumpSync.connectNewPump()
-            medtrumPump.setFakeTBRIfNotSet()
+            if (medtrumPump.takenInSerial == medtrumPump.pumpSN) {
+                // A running patch whose session was taken in from another device: keep its patch id,
+                // history position and basal. Resetting would make it look like a new patch.
+                aapsLogger.info(LTag.PUMPCOMM, "Serial number changed to a patch taken in from another device, keeping its session")
+                pumpSync.connectNewPump()
+            } else {
+                medtrumPump.resetPatchParameters()
+                pumpSync.connectNewPump()
+                medtrumPump.setFakeTBRIfNotSet()
+            }
         }
         preferences.observe(MedtrumBooleanKey.MedtrumWarningNotification).drop(1).collectResilient(scope, aapsLogger, LTag.PUMP) {
             medtrumPump.loadUserSettingsFromSP()
@@ -216,6 +224,11 @@ class MedtrumService : MetroService(), MedtrumBleCallback {
 
     fun connect(from: String): Boolean {
         aapsLogger.debug(LTag.PUMP, "connect: called from: $from")
+        if (preferences.get(MedtrumBooleanNonKey.SessionMovedAway)) {
+            // Handover test: another device has this patch now. Only one may talk to it.
+            aapsLogger.warn(LTag.PUMP, "connect: refused, the patch session was moved to another device")
+            return false
+        }
         return when (currentState) {
             is IdleState  -> {
                 medtrumPump.connectionState = ConnectionState.CONNECTING

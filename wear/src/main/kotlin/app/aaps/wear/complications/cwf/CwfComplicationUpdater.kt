@@ -18,8 +18,8 @@ import app.aaps.wear.complications.cwf.CwfComplicationUpdater.Companion.COALESCE
 import app.aaps.wear.complications.cwf.CwfComplicationUpdater.Companion.DEMAND_TIMEOUT_MS
 import app.aaps.wear.complications.cwf.CwfComplicationUpdater.Companion.FACE_DEDUPE_MS
 import app.aaps.wear.data.ComplicationDataRepository
+import app.aaps.wear.di.WearScope
 import app.aaps.wear.events.EventWearPreferenceChange
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
@@ -60,7 +60,7 @@ import java.util.concurrent.atomic.AtomicReference
  * Lives for the life of the process rather than of a service: a data source is bound only for as
  * long as it takes to answer one request, so nothing inside one can drive a schedule.
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class CwfComplicationUpdater(
     private val context: Context,

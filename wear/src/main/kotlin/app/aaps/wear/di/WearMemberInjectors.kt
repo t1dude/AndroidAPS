@@ -75,7 +75,6 @@ import app.aaps.wear.watchfaces.CircleWatchface
 import app.aaps.wear.watchfaces.CustomWatchface
 import app.aaps.wear.watchfaces.DigitalStyleWatchface
 import app.aaps.wear.watchfaces.utils.BaseWatchFace
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.ClassKey
 import dev.zacsweers.metro.ContributesTo
@@ -89,7 +88,7 @@ import dev.zacsweers.metro.Provides
  * Android builds activities, services and watch faces itself, so they cannot take dependencies in a
  * constructor. `WearMetroActivity` and `WearMetroService` call `injectMetroMembers` and land here.
  */
-@ContributesTo(AppScope::class)
+@ContributesTo(WearScope::class)
 @BindingContainer
 object WearMemberInjectors {
 

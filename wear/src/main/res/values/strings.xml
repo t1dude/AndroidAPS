@@ -463,4 +463,5 @@
     <string name="g7_watch_low">Low (from the sensor)</string>
     <string name="g7_watch_urgent_low">Urgent low (from the sensor)</string>
     <string name="g7_watch_low_message" comment="%1$s=glucose value, for example 3.1, %2$s=trend arrow">%1$s %2$s. No reading from the phone. Check your glucose.</string>
+
 </resources>

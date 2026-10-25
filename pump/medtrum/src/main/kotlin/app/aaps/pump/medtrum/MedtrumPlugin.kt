@@ -48,6 +48,7 @@ import app.aaps.core.ui.compose.icons.IcPluginMedtrum
 import app.aaps.core.ui.compose.preference.PreferenceSubScreenDef
 import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
 import app.aaps.pump.medtrum.compose.MedtrumComposeContent
+import app.aaps.pump.medtrum.handover.MedtrumSessionTransfer
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumDoubleNonKey
@@ -91,7 +92,9 @@ class MedtrumPlugin(
     private val pumpEnactResultProvider: () -> PumpEnactResult,
     private val protectionCheck: ProtectionCheck,
     private val blePreCheck: BlePreCheck,
-    notificationManager: NotificationManager
+    notificationManager: NotificationManager,
+    // Lazy: the transfer needs this plugin too
+    private val sessionTransfer: Lazy<MedtrumSessionTransfer>
 ) : PumpPluginBase(
     pluginDescription = PluginDescription()
         .mainType(PluginType.PUMP)
@@ -130,6 +133,9 @@ class MedtrumPlugin(
             updateMaxInsulinLimitsForPumpType()
         }
 
+        // Handover test: the watch can hand a patch session back at any time
+        sessionTransfer.value.start()
+
         // Force enable pump unreachable alert due to some failure modes of Medtrum pump
         preferences.put(BooleanKey.AlertPumpUnreachable, true)
     }
@@ -166,7 +172,8 @@ class MedtrumPlugin(
         medtrumPump.pumpSNFromSP != 0L && medtrumPump.pumpState > MedtrumPumpState.EJECTED
 
     override fun isInitialized(): Boolean {
-        return isConfigured() && medtrumPump.pumpState < MedtrumPumpState.STOPPED
+        // A session moved to another device (handover test) is not this phone's patch: no connects, no commands
+        return isConfigured() && !preferences.get(MedtrumBooleanNonKey.SessionMovedAway) && medtrumPump.pumpState < MedtrumPumpState.STOPPED
     }
 
     override fun isSuspended(): Boolean {

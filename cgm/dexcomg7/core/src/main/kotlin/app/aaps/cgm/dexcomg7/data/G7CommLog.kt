@@ -3,9 +3,6 @@ package app.aaps.cgm.dexcomg7.data
 import android.content.Context
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
-import dev.zacsweers.metro.AppScope
-import dev.zacsweers.metro.Inject
-import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -19,8 +16,7 @@ import java.io.File
  * in the app's own storage, and survive a restart. Lines older than 24 hours are dropped. Everything
  * also goes to the AAPS log. Lines never carry the pairing code or a key.
  */
-@SingleIn(AppScope::class)
-@Inject
+// One per app, built and scoped where it is bound: G7CoreBindings on the phone, WearG7Bindings on the watch
 class G7CommLog(
     private val context: Context,
     private val aapsLogger: AAPSLogger

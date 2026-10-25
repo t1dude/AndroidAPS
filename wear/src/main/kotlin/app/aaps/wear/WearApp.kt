@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import androidx.localbroadcastmanager.content.LocalBroadcastManager
 import androidx.preference.PreferenceManager
+import androidx.work.Configuration
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.di.injectMetroMembers
 import app.aaps.core.interfaces.logging.AAPSLogger
@@ -19,6 +20,7 @@ import app.aaps.wear.complications.cwf.CwfComplicationUpdater
 import app.aaps.wear.di.WearGraph
 import app.aaps.wear.events.EventWearPreferenceChange
 import app.aaps.wear.g7.G7WatchDirect
+import app.aaps.wear.handover.WatchEngineHook
 import app.aaps.wear.watchfaces.WatchFacePushHelper
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.MembersInjector
@@ -27,14 +29,23 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 
-class WearApp : Application(), MetroMemberInjector {
+class WearApp : Application(), MetroMemberInjector, Configuration.Provider {
+
+    /**
+     * WorkManager is only used by the AAPS engine (its keep alive and the other phone workers), and those are
+     * built by the engine's factory. WorkManagerInitializer is removed in the manifest so this one is used.
+     */
+    override val workManagerConfiguration: Configuration
+        get() = Configuration.Builder().apply { WatchEngineHook.workerFactory()?.let { setWorkerFactory(it) } }.build()
+
 
     /** Built once, on first use, because Android constructs this class before anything can be injected. */
     private val graph: WearGraph by lazy { createGraphFactory<WearGraph.Factory>().create(this) }
 
     @Suppress("UNCHECKED_CAST")
     override fun injectMembers(target: Any): Boolean {
-        val injector = graph.memberInjectors[target::class] ?: return false
+        // Not a companion class: one of the engine's (its screen, services, receivers)
+        val injector = graph.memberInjectors[target::class] ?: return WatchEngineHook.injectMembers(target)
         (injector as MembersInjector<Any>).injectMembers(target)
         return true
     }
@@ -81,6 +92,8 @@ class WearApp : Application(), MetroMemberInjector {
         g7WatchDirect.start()
         // Keeps the "min ago" text in the glucose circle picture up to date
         glucoseCircleUpdater.start()
+        // Handover: the AAPS engine, built only when the phone hands over a pump session (full app only)
+        WatchEngineHook.install(this, this, rxBus)
         PreferenceManager.getDefaultSharedPreferences(this).registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         startForegroundService(Intent(this, DataLayerListenerServiceWear::class.java))
     }

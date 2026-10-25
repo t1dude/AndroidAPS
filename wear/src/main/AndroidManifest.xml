@@ -128,6 +128,19 @@
             </intent-filter>
         </service>
 
+        <!-- WorkManager is configured by WearApp (Configuration.Provider), so its default initializer goes,
+             as in the phone app. Only the AAPS engine uses WorkManager on the watch. -->
+        <provider
+            android:name="androidx.startup.InitializationProvider"
+            android:authorities="${applicationId}.androidx-startup"
+            android:exported="false"
+            tools:node="merge">
+            <meta-data
+                android:name="androidx.work.WorkManagerInitializer"
+                android:value="androidx.startup"
+                tools:node="remove" />
+        </provider>
+
         <service
             android:name=".comm.DataLayerListenerServiceWear"
             android:exported="true">
@@ -142,8 +155,15 @@
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
             </intent-filter>
 
+            <!-- Files from the phone over a channel: the handover snapshot (HandoverSnapshot.CHANNEL_PATH).
+                 Without the data element Wear OS never delivers the channel to this service. -->
             <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+
+                <data
+                    android:host="*"
+                    android:pathPrefix="/aaps_handover_snapshot"
+                    android:scheme="wear" />
             </intent-filter>
 
             <intent-filter>

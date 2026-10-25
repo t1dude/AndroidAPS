@@ -282,6 +282,79 @@ class AppRepository internal constructor(
      */
     suspend fun vacuumDatabase(): VacuumOutcome = vacuumOrTrim(vacuum = ::vacuum, trim = ::trimForVacuum)
 
+    /**
+     * Writes a copy of the database to [path], cut down to what a device needs to take over the loop
+     * (watch handover): the records from [since] on, the ones still in force at [since] (a running temporary
+     * basal, the profile switch and running mode that apply), the cached daily doses from [dailyDosesSince]
+     * on, and nothing the other device does not use (APS results, device status, user entries, food,
+     * heart rate, steps, calibrations, preference and version changes). Superseded versions of records are
+     * left out too, only the current ones go.
+     *
+     * The copy is an ordinary database of this build (`VACUUM INTO`), so the other device opens it as its own.
+     * This database is only read.
+     */
+    suspend fun writeHandoverSnapshot(path: String, since: Long, dailyDosesSince: Long) {
+        database.useWriterConnection { connection ->
+            connection.usePrepared("VACUUM INTO ?") { it.bindText(1, path); it.step() }
+            connection.usePrepared("ATTACH DATABASE ? AS snap") { it.bindText(1, path); it.step() }
+            try {
+                val statements = buildList {
+                    HANDOVER_DROPPED_TABLES.forEach { add("DELETE FROM snap.$it" to emptyList<Long>()) }
+                    HANDOVER_KEPT_TABLES.forEach { add("DELETE FROM snap.$it WHERE referenceId IS NOT NULL OR isValid = 0" to emptyList()) }
+                    // Records of the window
+                    add("DELETE FROM snap.glucoseValues WHERE timestamp < ?" to listOf(since))
+                    add("DELETE FROM snap.boluses WHERE timestamp < ?" to listOf(since))
+                    add("DELETE FROM snap.bolusCalculatorResults WHERE timestamp < ?" to listOf(since))
+                    // ... and the ones still running at its start
+                    add("DELETE FROM snap.carbs WHERE timestamp + duration < ?" to listOf(since))
+                    add("DELETE FROM snap.temporaryBasals WHERE timestamp + duration < ?" to listOf(since))
+                    add("DELETE FROM snap.extendedBoluses WHERE timestamp + duration < ?" to listOf(since))
+                    // ... and the last ones before it, which are what applies at its start
+                    keepLastBefore("profileSwitches", 3, alsoLastPermanent = true)
+                    keepLastBefore("effectiveProfileSwitches", 3, end = "timestamp")
+                    keepLastBefore("temporaryTargets", 5)
+                    keepLastBefore("runningModes", 5, alsoLastPermanent = true)
+                    // Site, sensor and insulin changes are few, and the age of each is shown and used
+                    keepLastBefore("therapyEvents", 50)
+                    add("DELETE FROM snap.totalDailyDoses WHERE timestamp < ?" to listOf(dailyDosesSince))
+                }.map { (sql, args) -> sql.replace("%since%", since.toString()) to args }
+                statements.forEach { (sql, args) ->
+                    connection.usePrepared(sql) { statement ->
+                        args.forEachIndexed { index, value -> statement.bindLong(index + 1, value) }
+                        statement.step()
+                    }
+                }
+                connection.usePrepared("VACUUM snap") { it.step() }
+            } finally {
+                connection.usePrepared("DETACH DATABASE snap") { it.step() }
+            }
+        }
+    }
+
+    /**
+     * Deletes the records of [table] that ended before the window, except the last [count] that started
+     * before it. [end] is how the table's end is worked out (a table without a duration ends at its start).
+     *
+     * With [alsoLastPermanent] the last permanent record (duration 0) before the window stays too, however
+     * many temporary ones follow it: a permanent profile switch or running mode is in force until the next
+     * permanent one, and the device that takes over looks it up. Found on the watch: three temporary
+     * profile switches after the permanent one, and the engine had no requested profile.
+     */
+    private fun MutableList<Pair<String, List<Long>>>.keepLastBefore(
+        table: String,
+        count: Int,
+        end: String = "timestamp + duration",
+        alsoLastPermanent: Boolean = false
+    ) {
+        val permanent =
+            if (alsoLastPermanent) " AND id NOT IN (SELECT id FROM snap.$table WHERE duration = 0 AND timestamp < %since% ORDER BY timestamp DESC LIMIT 1)"
+            else ""
+        add(
+            "DELETE FROM snap.$table WHERE $end < %since% AND id NOT IN " +
+                "(SELECT id FROM snap.$table WHERE timestamp < %since% ORDER BY timestamp DESC LIMIT $count)" + permanent to emptyList()
+        )
+    }
+
     private suspend fun vacuum() {
         database.useWriterConnection { connection ->
             connection.usePrepared("PRAGMA wal_checkpoint(TRUNCATE)") { it.step() }
@@ -1032,3 +1105,14 @@ class AppRepository internal constructor(
         const val VACUUM_TRIM_KEEP_DAYS = 2L
     }
 }
+
+/** Tables a handover snapshot carries no rows of (see [AppRepository.writeHandoverSnapshot]). */
+private val HANDOVER_DROPPED_TABLES = listOf(
+    "apsResults", "deviceStatus", "userEntry", "preferenceChanges", "versionChanges", "foods", "heartRate", "stepsCount", "calibrationEntries"
+)
+
+/** Tables a handover snapshot keeps the current rows of. */
+private val HANDOVER_KEPT_TABLES = listOf(
+    "glucoseValues", "boluses", "bolusCalculatorResults", "carbs", "temporaryBasals", "extendedBoluses", "profileSwitches",
+    "effectiveProfileSwitches", "temporaryTargets", "runningModes", "therapyEvents", "totalDailyDoses"
+)

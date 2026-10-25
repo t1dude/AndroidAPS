@@ -65,6 +65,8 @@ android {
     productFlavors {
         create("full") {
             isDefault = true
+            // The engine modules need Android 12 (Bluetooth permissions, the phone's own minimum)
+            minSdk = 31
             applicationId = "info.nightscout.androidaps"
             dimension = "standard"
             resValue("string", "app_name", "AAPS")
@@ -114,6 +116,13 @@ android {
         buildConfig = true
         resValues = true
         compose = true
+    }
+
+    // The flavours without the engine share one stand-in for the hook the full app gets from src/full
+    sourceSets {
+        listOf("pumpcontrol", "aapsclient", "aapsclient2", "aapsclient3").forEach { flavor ->
+            named(flavor) { kotlin.directories.add("src/noEngine/kotlin") }
+        }
     }
 }
 
@@ -236,8 +245,13 @@ dependencies {
     implementation(project(":core:data"))
     // Direct-to-watch: the watch reads the Dexcom G7 itself, in the sensor's watch slot.
     implementation(project(":cgm:dexcomg7:core"))
+    // Handover: the AAPS engine, which runs the loop and the pump while the watch holds the pump. Only in
+    // the full app; the other flavours get the no-engine stand-in from src/noEngine.
+    "fullImplementation"(project(":wear:engine"))
 
     implementation(libs.androidx.appcompat)
+    // WearApp configures WorkManager for the engine's workers (full app); the other flavours need the class too
+    implementation(libs.androidx.work.runtime)
     implementation(libs.androidx.core)
     implementation(libs.androidx.datastore)
     implementation(libs.androidx.legacy.support)

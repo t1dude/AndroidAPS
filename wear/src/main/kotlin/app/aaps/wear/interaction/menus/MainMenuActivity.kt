@@ -13,6 +13,7 @@ import app.aaps.core.interfaces.rx.weardata.EventData.ActionResendData
 import app.aaps.core.keys.BooleanKey
 import app.aaps.wear.BuildConfig
 import app.aaps.wear.R
+import app.aaps.wear.handover.WatchEngineHook
 import app.aaps.wear.interaction.actions.ECarbActivity
 import app.aaps.wear.interaction.actions.RunningModePickerActivity
 import app.aaps.wear.interaction.actions.TempTargetActivity
@@ -75,6 +76,9 @@ class MainMenuActivity : MenuListActivity() {
                 if (sp.getBoolean(R.string.key_prime_fill, false))
                     add(MenuItem(R.drawable.ic_canula, getString(R.string.menu_prime_fill)))
             }
+            // Handover test: only while the phone has handed a Medtrum patch session to the watch
+            if (WatchEngineHook.hasSession())
+                add(MenuItem(R.drawable.ic_status, WatchEngineHook.menuLabel(this@MainMenuActivity)))
             // Bottom of the menu: only present on Wear OS 6+ (where CWF and the other code-based
             // faces cannot run) and only while the pushed face is not installed. Since each app
             // install/update pushes the face automatically, this is the recovery action for a
@@ -107,6 +111,7 @@ class MainMenuActivity : MenuListActivity() {
             getString(R.string.menu_prime_fill)         -> startActivity(Intent(this, FillMenuActivity::class.java))
             getString(R.string.menu_resync)             -> rxBus.send(EventWearToMobile(ActionResendData("Re-Sync")))
             getString(R.string.menu_install_watchface)  -> installWatchFace()
+            WatchEngineHook.menuLabel(this)             -> WatchEngineHook.screenIntent(this)?.let { startActivity(it) }
         }
     }
 

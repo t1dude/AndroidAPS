@@ -3,12 +3,16 @@ package app.aaps.pump.medtrum.compose
 import android.content.Context
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Bluetooth
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.SwapHoriz
+import androidx.compose.material.icons.filled.Upload
+import androidx.compose.material.icons.filled.Watch
 import androidx.compose.runtime.Stable
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import app.aaps.core.data.model.RM
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
@@ -36,6 +40,7 @@ import app.aaps.core.ui.compose.pump.tickerFlow
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
+import app.aaps.pump.medtrum.handover.MedtrumSessionTransfer
 import app.aaps.pump.medtrum.code.ConnectionState
 import app.aaps.pump.medtrum.code.PatchStep
 import app.aaps.pump.medtrum.comm.enums.BasalType
@@ -65,6 +70,12 @@ sealed class MedtrumOverviewEvent {
     data class StartPatchWorkflow(val startStep: PatchStep) : MedtrumOverviewEvent()
     data class ShowDialog(val title: String, val message: String) : MedtrumOverviewEvent()
     data object ConfirmUnpair : MedtrumOverviewEvent()
+    data object ConfirmMoveSessionOut : MedtrumOverviewEvent()
+    data object ConfirmMoveSessionToWatch : MedtrumOverviewEvent()
+    data object ConfirmTakeSessionIn : MedtrumOverviewEvent()
+
+    /** After a session move: [message], then the question whether to turn the loop back on as [mode]. */
+    data class OfferRestoreMode(val title: String, val message: String, val mode: RM.Mode, val modeName: String) : MedtrumOverviewEvent()
 }
 
 // Registers itself: @ViewModelKey infers the key from the class. No graph entry, and deliberately
@@ -85,7 +96,8 @@ class MedtrumOverviewViewModel(
     private val ch: ConcentrationHelper,
     private val preferences: Preferences,
     private val uel: UserEntryLogger,
-    private val context: Context
+    private val context: Context,
+    private val sessionTransfer: MedtrumSessionTransfer
 ) : ViewModel() {
 
     private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
@@ -107,7 +119,8 @@ class MedtrumOverviewViewModel(
         medtrumPump.lastBolusAmountFlow,
         medtrumPump.lastConnectionFlow,
         communicationStatus.refreshTrigger,
-        tickerFlow(60_000L)
+        tickerFlow(60_000L),
+        sessionTransfer.movedAway
     ) { values ->
         @Suppress("UNCHECKED_CAST")
         val connectionState = values[0] as ConnectionState
@@ -161,6 +174,47 @@ class MedtrumOverviewViewModel(
         _events.tryEmit(MedtrumOverviewEvent.ConfirmUnpair)
     }
 
+    fun onMoveSessionOutClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionOut)
+    }
+
+    fun onMoveSessionToWatchClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionToWatch)
+    }
+
+    fun onTakeSessionInClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmTakeSessionIn)
+    }
+
+    /** Handover test: the patch session goes to a file, and this phone stops talking to the patch. */
+    fun performMoveSessionOut() {
+        scope.launch { show(rh.gs(R.string.handover_test_move_out), sessionTransfer.moveOut()) }
+    }
+
+    /** Handover test: as [performMoveSessionOut], and the session is also sent to the watch. */
+    fun performMoveSessionToWatch() {
+        scope.launch { show(rh.gs(R.string.handover_test_move_to_watch), sessionTransfer.moveOut(toWatch = true)) }
+    }
+
+    /** Handover test: the newest patch session file is taken in, and this phone drives the patch. */
+    fun performTakeSessionIn() {
+        scope.launch { show(rh.gs(R.string.handover_test_take_in), sessionTransfer.takeIn()) }
+    }
+
+    private fun show(title: String, result: MedtrumSessionTransfer.Result) {
+        val mode = result.modeToRestore
+        _events.tryEmit(
+            if (mode != null) MedtrumOverviewEvent.OfferRestoreMode(title, result.message, mode, sessionTransfer.modeName(mode))
+            else MedtrumOverviewEvent.ShowDialog(title, result.message)
+        )
+    }
+
+    fun restoreMode(mode: RM.Mode) {
+        scope.launch { sessionTransfer.restoreMode(mode) }
+    }
+
+    fun keepLoopOff() = sessionTransfer.forgetRememberedMode()
+
     fun performUnpair() {
         aapsLogger.debug(LTag.PUMP, "performUnpair")
         uel.log(Action.CLEAR_PAIRING_KEYS, Sources.Medtrum)
@@ -206,7 +260,9 @@ class MedtrumOverviewViewModel(
         lastConnectionTime: Long
     ): PumpOverviewUiState {
         // Status banner: communication status from shared helper, or pump-specific warning
-        val statusBanner = buildStatusBanner(pumpState) ?: communicationStatus.statusBanner()
+        val statusBanner =
+            if (sessionTransfer.isMovedAway) StatusBanner(text = rh.gs(R.string.handover_test_banner), level = StatusLevel.WARNING)
+            else buildStatusBanner(pumpState) ?: communicationStatus.statusBanner()
         val queueStatus = communicationStatus.queueStatus()
 
         // Connection state for action button enablement
@@ -324,6 +380,31 @@ class MedtrumOverviewViewModel(
                     onClick = { onClickChangePatch() }
                 )
             )
+            // Handover test (phase 0): move the running patch session to another phone and back
+            if (isPaired && !sessionTransfer.isMovedAway) {
+                add(
+                    ScreenAction(
+                        label = rh.gs(R.string.handover_test_move_out),
+                        icon = Icons.Filled.Upload,
+                        onClick = { onMoveSessionOutClick() }
+                    )
+                )
+                add(
+                    ScreenAction(
+                        label = rh.gs(R.string.handover_test_move_to_watch),
+                        icon = Icons.Filled.Watch,
+                        onClick = { onMoveSessionToWatchClick() }
+                    )
+                )
+            } else {
+                add(
+                    ScreenAction(
+                        label = rh.gs(R.string.handover_test_take_in),
+                        icon = Icons.Filled.Download,
+                        onClick = { onTakeSessionInClick() }
+                    )
+                )
+            }
             if (isPaired) {
                 add(
                     ScreenAction(

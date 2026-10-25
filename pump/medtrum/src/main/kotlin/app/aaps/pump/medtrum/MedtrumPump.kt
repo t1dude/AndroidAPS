@@ -23,6 +23,7 @@ import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
 import app.aaps.pump.medtrum.comm.enums.ModelType
 import app.aaps.pump.medtrum.extension.toByteArray
 import app.aaps.pump.medtrum.extension.toInt
+import app.aaps.pump.medtrum.handover.MedtrumBasalStatus
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import app.aaps.pump.medtrum.keys.MedtrumDoubleNonKey
@@ -259,6 +260,13 @@ class MedtrumPump(
     private var _pumpSN = 0L
     val pumpSN: Long
         get() = _pumpSN
+
+    /**
+     * Serial of a patch session that was just taken in from another device (handover test). A change to
+     * this serial is the same patch, still running, so the "new patch" reset must not run for it. Any
+     * other serial is a real new patch and is reset as before.
+     */
+    @Volatile var takenInSerial: Long? = null
 
     val pumpSNFromSP: Long
         get() =
@@ -583,6 +591,14 @@ class MedtrumPump(
         _lastBasalStartTime = basalStartTime
         _lastBasalDuration = durationInMin
     }
+
+    /**
+     * The basal the patch reported last, for a handover (see `MedtrumSessionTransfer`). Null before the first
+     * status read since the app started.
+     */
+    fun basalStatus(readAt: Long): MedtrumBasalStatus? =
+        if (lastBasalStartTime == 0L) null
+        else MedtrumBasalStatus(lastBasalType, lastBasalRate, lastBasalSequence, lastBasalPatchId, lastBasalStartTime, readAt)
 
     fun handleStopStatusUpdate(stopSequence: Int, stopPatchId: Long) {
         aapsLogger.debug(LTag.PUMP, "handleStopStatusUpdate: stopSequence: $stopSequence stopPatchId: $stopPatchId")

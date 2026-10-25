@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <uses-permission android:name="android.permission.WAKE_LOCK" />
+
+    <application>
+        <!-- Handover test: reads a Medtrum patch whose session the phone handed over -->
+        <service
+            android:name=".medtrum.MedtrumWatchService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice" />
+        <activity
+            android:name=".medtrum.MedtrumWatchActivity"
+            android:exported="false"
+            android:taskAffinity="" />
+        <receiver
+            android:name=".medtrum.MedtrumWatchAlarmReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".receivers.CarbSuggestionReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".EngineRestartReceiver"
+            android:exported="false" />
+    </application>
+
+</manifest>

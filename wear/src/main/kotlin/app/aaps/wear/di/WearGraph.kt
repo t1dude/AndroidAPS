@@ -5,7 +5,6 @@ import app.aaps.core.interfaces.di.FeatureMemberInjectors
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.wear.WearApp
 import app.aaps.wear.sharedPreferences.PreferencesImpl
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.MembersInjector
 import dev.zacsweers.metro.Multibinds
@@ -24,9 +23,12 @@ import kotlin.time.ExperimentalTime
  * Everything the old `WearModule` bound by hand is either contributed by the class itself now
  * (`@ContributesBinding` / `@SingleIn`) or provided below. The one thing that cannot be contributed is
  * [WearApp] itself, because Android constructs it - it arrives through the factory.
+ *
+ * Its scope is [WearScope], not `AppScope`: the full app also carries the AAPS engine (`:wear:engine`),
+ * which has its own `AppScope` graph built from the phone's modules.
  */
-@SingleIn(AppScope::class)
-@DependencyGraph(AppScope::class)
+@SingleIn(WearScope::class)
+@DependencyGraph(WearScope::class)
 interface WearGraph {
 
     /**

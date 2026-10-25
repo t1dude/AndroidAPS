@@ -690,6 +690,24 @@ sealed class EventData : Event() {
         REFUSED
     }
 
+    /**
+     * Mobile→Wear, handover test: a running Medtrum patch session, in the text form of `MedtrumSession`.
+     * The phone has stopped talking to the patch. It holds the patch serial and session token.
+     */
+    @Serializable
+    data class MedtrumSessionToWatch(val session: String) : EventData()
+
+    /**
+     * Wear→Mobile, handover test: the watch hands the Medtrum patch session back and stops talking to the
+     * patch. [log] is the watch's test log, for the phone's exports folder.
+     */
+    @Serializable
+    data class MedtrumSessionToPhone(val session: String, val log: String = "") : EventData()
+
+    /** Wear→Mobile, handover test: the watch's Medtrum test log, sent on request, for the phone's exports folder. */
+    @Serializable
+    data class MedtrumWatchLog(val log: String) : EventData()
+
     // Wear -> Wear (workaround)
     @Serializable
     data class RunningModePreSelect(

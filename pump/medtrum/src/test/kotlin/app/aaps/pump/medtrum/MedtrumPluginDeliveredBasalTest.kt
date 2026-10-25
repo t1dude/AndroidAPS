@@ -5,6 +5,7 @@ import app.aaps.core.interfaces.protection.ProtectionCheck
 import app.aaps.core.interfaces.pump.BlePreCheck
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
+import app.aaps.pump.medtrum.handover.MedtrumSessionTransfer
 import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import com.google.common.truth.Truth.assertThat
 import org.junit.jupiter.api.BeforeEach
@@ -26,7 +27,7 @@ class MedtrumPluginDeliveredBasalTest : MedtrumTestBase() {
     fun preparePlugin() {
         plugin = MedtrumPlugin(
             aapsLogger, rh, preferences, commandQueue, rxBus, context, dateUtil, medtrumPump, temporaryBasalStorage,
-            pumpEnactResultProvider, protectionCheck, blePreCheck, notificationManager
+            pumpEnactResultProvider, protectionCheck, blePreCheck, notificationManager, lazy { mock<MedtrumSessionTransfer>() }
         )
     }
 

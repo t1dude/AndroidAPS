@@ -14,7 +14,6 @@ import app.aaps.shared.impl.rx.bus.RxBusImpl
 import app.aaps.shared.impl.sharedPreferences.SPImpl
 import app.aaps.shared.impl.sharedPreferences.defaultPreferences
 import app.aaps.shared.impl.utils.DateUtilImpl
-import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.BindingContainer
 import dev.zacsweers.metro.ContributesTo
 import dev.zacsweers.metro.Provides
@@ -25,28 +24,28 @@ import dev.zacsweers.metro.SingleIn
  * The phone builds all five of these in Metro too, in its own `SharedImplBindings` - the classes are
  * shared, the wiring is not. Wear has its own graph, so it needs its own copy of these bindings.
  */
-@ContributesTo(AppScope::class)
+@ContributesTo(WearScope::class)
 @BindingContainer
 object SharedImplModule {
 
     @Provides
-    @SingleIn(AppScope::class)
+    @SingleIn(WearScope::class)
     fun provideSP(context: Context): SP =
         SPImpl(defaultPreferences(context), context)
 
     @Provides
-    @SingleIn(AppScope::class)
+    @SingleIn(WearScope::class)
     fun provideL(preferences: () -> Preferences): L = LImpl { preferences() }
 
     @Provides
-    @SingleIn(AppScope::class)
+    @SingleIn(WearScope::class)
     fun provideDateUtil(context: Context): DateUtil = DateUtilImpl(context)
 
     @Provides
-    @SingleIn(AppScope::class)
+    @SingleIn(WearScope::class)
     fun provideRxBus(aapsLogger: AAPSLogger): RxBus = RxBusImpl(aapsLogger)
 
     @Provides
-    @SingleIn(AppScope::class)
+    @SingleIn(WearScope::class)
     internal fun provideSchedulers(): AapsSchedulers = AapsSchedulersImpl()
 }

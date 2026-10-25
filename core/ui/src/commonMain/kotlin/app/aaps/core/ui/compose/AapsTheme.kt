@@ -372,3 +372,30 @@ fun AapsTheme(
         }
     }
 }
+
+/**
+ * Shows [content] at phone size on a tablet: the typography and [LocalAapsScale] are put back to
+ * the phone values that [AapsTheme] scales up from a smallest width of [TABLET_MIN_SW_DP].
+ * Used by the Circle home screen, which uses the extra room of a tablet or an unfolded foldable to
+ * show more, not to show the same things bigger. Does nothing when [enabled] is false or on a phone.
+ */
+@Composable
+fun PhoneScale(
+    enabled: Boolean = true,
+    content: @Composable () -> Unit
+) {
+    if (!enabled || LocalAapsScale.current == 1f) {
+        content()
+        return
+    }
+    val phoneTypography = remember { Typography().withoutFontPadding() }
+    CompositionLocalProvider(LocalAapsScale provides 1f) {
+        MaterialTheme(
+            colorScheme = MaterialTheme.colorScheme,
+            shapes = MaterialTheme.shapes,
+            typography = phoneTypography
+        ) {
+            CompositionLocalProvider(LocalAapsTypography provides aapsTypography(1f), content = content)
+        }
+    }
+}

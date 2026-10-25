@@ -67,6 +67,7 @@ fun OverviewScreen(
     tbrState: TbrState,
     smbEnabled: Boolean,
     isSimpleMode: Boolean,
+    isCircleHomeScreen: Boolean = false,
     calcProgress: Int,
     graphViewModel: GraphViewModel,
     chipsViewModel: ChipsViewModel,
@@ -146,7 +147,42 @@ fun OverviewScreen(
     val isTablet = smallestScreenWidthDp() >= TABLET_MIN_SW_DP
 
     Box(modifier = modifier.fillMaxSize()) {
-        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // The Circle design is used on every screen shape when chosen: portrait, landscape, tablet and an
+        // unfolded foldable (which Android reports as a landscape tablet). It is one scrolling column.
+        if (isCircleHomeScreen) {
+            OverviewScreenCircle(
+                profileName = profileName,
+                isProfileModified = isProfileModified,
+                profileProgress = profileProgress,
+                profileSceneManaged = profileSceneManaged,
+                tempTargetText = tempTargetText,
+                tempTargetState = tempTargetState,
+                tempTargetProgress = tempTargetProgress,
+                tempTargetReason = tempTargetReason,
+                tempTargetSceneManaged = tempTargetSceneManaged,
+                runningMode = runningMode,
+                runningModeText = runningModeText,
+                tbrState = tbrState,
+                isSimpleMode = isSimpleMode,
+                graphViewModel = graphViewModel,
+                chipsViewModel = chipsViewModel,
+                statusViewModel = statusViewModel,
+                onNavigate = onNavigate,
+                onTbrChipClick = onTbrChipClick,
+                onIobChipClick = onIobChipClick,
+                paddingValues = paddingValues,
+                activeSceneState = activeSceneState,
+                sceneExpired = sceneExpired,
+                activeSceneChainTargetName = activeSceneChainTargetName,
+                onEndScene = onEndScene,
+                onDismissScene = onDismissScene,
+                endSceneEnabled = endSceneEnabled,
+                commandsAllowed = commandsAllowed,
+                formatDuration = formatDuration,
+                eatReminderBanner = eatReminderBanner,
+                overlaidBarsHeight = overlaidBarsHeight
+            )
+        } else BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
             // Two columns only where each one gets the width of a phone column. The text scale keeps that
             // true for the larger tablet text (see `typographyScaleFor`). Without the width check a nearly
             // square tablet window got two columns narrower than any phone has.

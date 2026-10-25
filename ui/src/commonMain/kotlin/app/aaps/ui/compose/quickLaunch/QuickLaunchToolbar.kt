@@ -1,5 +1,6 @@
 package app.aaps.ui.compose.quickLaunch
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import app.aaps.core.interfaces.navigation.ElementType
 import app.aaps.core.ui.CoreUiStrings
@@ -63,14 +65,25 @@ data class ResolvedQuickLaunchItem(
 fun QuickLaunchToolbar(
     items: List<ResolvedQuickLaunchItem>,
     onActionClick: (QuickLaunchAction) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    /** Height of the toolbar, and width of each button. */
+    itemSize: Dp = 48.dp,
+    iconSize: Dp = 24.dp,
+    /** Circle home screen: the same surface as the home screen panels, a thin outline and a light shadow. */
+    panelStyle: Boolean = false
 ) {
     if (items.isEmpty()) return
 
-    AapsFloatingToolbar(modifier = modifier.padding(horizontal = 16.dp)) {
+    AapsFloatingToolbar(
+        modifier = modifier.padding(horizontal = 16.dp),
+        color = if (panelStyle) MaterialTheme.colorScheme.surfaceContainerLow else MaterialTheme.colorScheme.surfaceContainerHigh,
+        shadowElevation = if (panelStyle) 2.dp else 6.dp,
+        tonalElevation = if (panelStyle) 0.dp else 6.dp,
+        border = if (panelStyle) BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant) else null
+    ) {
         // The toolbar's padding is already taken off this width
-        BoxWithConstraints(Modifier.height(48.dp)) {
-            val itemSizePx = with(LocalDensity.current) { 48.dp.toPx() }
+        BoxWithConstraints(Modifier.height(itemSize)) {
+            val itemSizePx = with(LocalDensity.current) { itemSize.toPx() }
             val maxItems = (constraints.maxWidth / itemSizePx).toInt().coerceAtLeast(1)
 
             val needsOverflow = items.size > maxItems
@@ -79,10 +92,10 @@ fun QuickLaunchToolbar(
 
             Row(verticalAlignment = Alignment.CenterVertically) {
                 visibleItems.forEach { item ->
-                    ToolbarIconButton(item, onActionClick)
+                    ToolbarIconButton(item, onActionClick, itemSize, iconSize)
                 }
                 if (needsOverflow) {
-                    OverflowMenuButton(overflowItems, onActionClick)
+                    OverflowMenuButton(overflowItems, onActionClick, itemSize, iconSize)
                 }
             }
         }
@@ -113,7 +126,9 @@ internal fun resolveItemColor(item: ResolvedQuickLaunchItem): androidx.compose.u
 @Composable
 private fun ToolbarIconButton(
     item: ResolvedQuickLaunchItem,
-    onActionClick: (QuickLaunchAction) -> Unit
+    onActionClick: (QuickLaunchAction) -> Unit,
+    itemSize: Dp,
+    iconSize: Dp
 ) {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
@@ -135,13 +150,13 @@ private fun ToolbarIconButton(
             onClick = { onActionClick(item.action) },
             enabled = item.enabled,
             modifier = Modifier
-                .size(48.dp)
+                .size(itemSize)
         ) {
             Icon(
                 imageVector = item.icon,
                 contentDescription = item.label,
                 tint = resolveItemColor(item),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
     }
@@ -150,19 +165,21 @@ private fun ToolbarIconButton(
 @Composable
 private fun OverflowMenuButton(
     overflowItems: List<ResolvedQuickLaunchItem>,
-    onActionClick: (QuickLaunchAction) -> Unit
+    onActionClick: (QuickLaunchAction) -> Unit,
+    itemSize: Dp,
+    iconSize: Dp
 ) {
     var showMenu by remember { mutableStateOf(false) }
 
     Box {
         IconButton(
             onClick = { showMenu = true },
-            modifier = Modifier.size(48.dp)
+            modifier = Modifier.size(itemSize)
         ) {
             Icon(
                 imageVector = Icons.Default.MoreVert,
                 contentDescription = stringResource(CoreUiStrings.more_options),
-                modifier = Modifier.size(24.dp)
+                modifier = Modifier.size(iconSize)
             )
         }
         DropdownMenu(

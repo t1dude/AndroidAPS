@@ -156,7 +156,7 @@ private fun TT.Reason?.toDescription(): TextRef? = when (this) {
     null                   -> null
 }
 
-private fun TT.Reason?.toIcon(): ImageVector = when (this) {
+internal fun TT.Reason?.toIcon(): ImageVector = when (this) {
     TT.Reason.EATING_SOON  -> IcTtEatingSoon
     TT.Reason.ACTIVITY     -> IcTtActivity
     TT.Reason.HYPOGLYCEMIA -> IcTtHypo

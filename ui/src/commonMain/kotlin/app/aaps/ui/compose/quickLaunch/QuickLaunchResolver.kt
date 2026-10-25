@@ -2,6 +2,8 @@ package app.aaps.ui.compose.quickLaunch
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Extension
+import androidx.compose.material.icons.filled.Fastfood
+import androidx.compose.material.icons.filled.ManageAccounts
 import androidx.compose.ui.graphics.vector.ImageVector
 import app.aaps.core.data.model.TT
 import app.aaps.core.interfaces.InterfacesStrings
@@ -19,6 +21,7 @@ import app.aaps.core.objects.wizard.QuickWizard
 import app.aaps.core.objects.wizard.QuickWizardMode
 import app.aaps.core.ui.CoreUiStrings
 import app.aaps.core.ui.compose.formatMinutesAsDuration
+import app.aaps.core.ui.compose.icons.IcAutomation
 import app.aaps.core.ui.compose.icons.IcBolus
 import app.aaps.core.ui.compose.icons.IcCarbs
 import app.aaps.core.ui.compose.icons.IcTtActivity
@@ -28,6 +31,7 @@ import app.aaps.core.ui.compose.icons.IcTtManual
 import app.aaps.core.ui.compose.navigation.description
 import app.aaps.core.ui.compose.navigation.icon
 import app.aaps.core.ui.compose.navigation.label
+import app.aaps.ui.UiStrings
 import app.aaps.ui.compose.navigation.ElementAvailability
 import app.aaps.ui.compose.scenes.SceneIcons
 import app.aaps.ui.compose.scenes.sceneSummaryWithChain
@@ -94,6 +98,13 @@ class QuickLaunchResolver(
             ?.let { SceneIcons.fromKey(it.icon).icon }
             ?: action.elementType.icon()
 
+        is QuickLaunchAction.SheetAction       -> when (action.sheet) {
+            HomeSheet.TREATMENTS -> Icons.Default.Fastfood
+            HomeSheet.SCENES     -> IcAutomation
+            HomeSheet.MANAGE       -> Icons.Default.ManageAccounts
+            HomeSheet.TEMP_TARGETS -> IcTtManual
+        }
+
         else                                   -> action.elementType?.icon() ?: Icons.Default.Extension
     }
 
@@ -150,6 +161,14 @@ class QuickLaunchResolver(
         is QuickLaunchAction.ProfileAction     -> buildProfileLabel(action)
         is QuickLaunchAction.SceneAction       -> sceneRepository.getScene(action.sceneId)?.name ?: "?"
         is QuickLaunchAction.PluginAction      -> findPlugin(action.className)?.name ?: "?"
+        is QuickLaunchAction.SheetAction       -> rh.gs(
+            when (action.sheet) {
+                HomeSheet.TREATMENTS -> CoreUiStrings.treatments
+                HomeSheet.SCENES     -> CoreUiStrings.scenes
+                HomeSheet.MANAGE       -> CoreUiStrings.manage
+                HomeSheet.TEMP_TARGETS -> UiStrings.temp_target_list
+            }
+        )
 
         else                                   -> {
             val label = action.elementType?.label()

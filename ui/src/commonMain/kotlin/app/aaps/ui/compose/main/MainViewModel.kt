@@ -9,6 +9,7 @@ import app.aaps.core.data.model.ActiveSceneState
 import app.aaps.core.data.model.RM
 import app.aaps.core.data.model.SceneLifecycle
 import app.aaps.core.data.model.TT
+import app.aaps.core.data.model.TTPreset
 import app.aaps.core.data.time.T
 import app.aaps.core.data.ue.Action
 import app.aaps.core.data.ue.Sources
@@ -60,6 +61,7 @@ import app.aaps.core.interfaces.utils.DateUtil
 import app.aaps.core.interfaces.utils.Round
 import app.aaps.core.interfaces.utils.fabric.FabricPrivacy
 import app.aaps.core.keys.BooleanKey
+import app.aaps.core.keys.StringKey
 import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.AppPlatform
 import app.aaps.core.keys.interfaces.Preferences
@@ -248,6 +250,7 @@ class MainViewModel(
         MainUiState(
             isDrawerOpen = ev.isDrawerOpen,
             isSimpleMode = ev.isSimpleMode,
+            isCircleHomeScreen = ev.isCircleHomeScreen,
             showAboutDialog = ev.showAboutDialog,
             showMaintenanceSheet = ev.showMaintenanceSheet,
             showAuthFailedDialog = ev.showAuthFailedDialog,
@@ -278,6 +281,9 @@ class MainViewModel(
             .launchIn(viewModelScope)
         preferences.observe(BooleanKey.ApsUseSmb)
             .onEach { smb -> _eventState.update { it.copy(smbEnabled = smb) } }
+            .launchIn(viewModelScope)
+        preferences.observe(StringKey.OverviewHomeScreenDesign)
+            .onEach { design -> _eventState.update { it.copy(isCircleHomeScreen = design == "circle") } }
             .launchIn(viewModelScope)
         observeQuickLaunch()
     }
@@ -744,6 +750,9 @@ class MainViewModel(
     }
 
     /** QuickLaunch TT preset → contact the master, render the master's confirmation, commit on OK (role-transparent). */
+    /** The temp target presets with their names filled in, for the temp target list. */
+    fun tempTargetPresets(): List<TTPreset> = preferences.get(StringNonKey.TempTargetPresets).toTTPresetsWithDisplayName(rh)
+
     fun requestTempTargetPresetConfirmation(presetId: String) {
         val presets = preferences.get(StringNonKey.TempTargetPresets).toTTPresetsWithDisplayName(rh)
         val preset = presets.find { it.id == presetId } ?: return
@@ -1004,6 +1013,7 @@ class MainViewModel(
 private data class EventState(
     val isDrawerOpen: Boolean = false,
     val isSimpleMode: Boolean = true,
+    val isCircleHomeScreen: Boolean = false,
     val smbEnabled: Boolean = false,
     val showAboutDialog: Boolean = false,
     val showMaintenanceSheet: Boolean = false,

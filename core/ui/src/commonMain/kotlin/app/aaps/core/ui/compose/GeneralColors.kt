@@ -106,7 +106,12 @@ data class GeneralColors(
     val notificationAnnouncement: Color,
     val onNotification: Color,
     // Toggle colors
-    val toggleOn: Color
+    val toggleOn: Color,
+    // Circle home screen colors, the softer palette of the glucose circle watchface
+    val circleNormal: Color,
+    val circleWarning: Color,
+    val circleCritical: Color,
+    val circleAccent: Color
 )
 
 /**
@@ -164,7 +169,12 @@ val LightGeneralColors = GeneralColors(
     notificationInfo = Color(0xFF009705),         // green for info notifications
     notificationAnnouncement = Color(0xFFFF8C00), // orange for announcements
     onNotification = Color(0xFFFFFFFF),            // white text on notification backgrounds
-    toggleOn = Color(0xFF4CAF50)                    // green for active/selected toggles
+    toggleOn = Color(0xFF4CAF50),                   // green for active/selected toggles
+    // Darker than the watchface colors so they stay readable on a light background
+    circleNormal = Color(0xFF2E9E5B),               // soft green: in range, all good
+    circleWarning = Color(0xFFB7860B),              // soft amber: high, needs attention soon
+    circleCritical = Color(0xFFD9483B),             // soft red: low, act now
+    circleAccent = Color(0xFF5B67C9)                // lavender accent
 )
 
 /**
@@ -222,7 +232,12 @@ val DarkGeneralColors = GeneralColors(
     notificationInfo = Color(0xFF009705),
     notificationAnnouncement = Color(0xFFFF8C00),
     onNotification = Color(0xFFFFFFFF),
-    toggleOn = Color(0xFF81C784)                    // lighter green for active/selected toggles (dark mode)
+    toggleOn = Color(0xFF81C784),                   // lighter green for active/selected toggles (dark mode)
+    // Same values as the glucose circle watchface
+    circleNormal = Color(0xFF5BD68A),               // soft green: in range, all good
+    circleWarning = Color(0xFFF2C14E),              // soft amber: high, needs attention soon
+    circleCritical = Color(0xFFFF7A6B),             // soft red: low, act now
+    circleAccent = Color(0xFFA9B4FF)                // lavender accent
 )
 
 /**

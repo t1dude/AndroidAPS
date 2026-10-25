@@ -1,5 +1,6 @@
 package app.aaps.core.ui.compose
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
@@ -14,6 +15,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 /** Same as the default elevation of [AapsFab], so the toolbar and the FAB beside it cast the same shadow. */
@@ -48,18 +51,27 @@ fun AapsFloatingToolbarRow(
  * M3 floating toolbar: a pill of icon buttons that floats over the content.
  *
  * @param modifier Modifier to be applied to the toolbar
+ * @param color Background colour of the pill
+ * @param shadowElevation Shadow under the pill
+ * @param tonalElevation Tonal elevation of the pill
+ * @param border Optional outline of the pill
  * @param content The buttons, usually `IconButton`s
  */
 @Composable
 fun AapsFloatingToolbar(
     modifier: Modifier = Modifier,
+    color: Color = MaterialTheme.colorScheme.surfaceContainerHigh,
+    shadowElevation: Dp = toolbarElevation,
+    tonalElevation: Dp = toolbarElevation,
+    border: BorderStroke? = null,
     content: @Composable RowScope.() -> Unit
 ) {
     Surface(
         shape = RoundedCornerShape(percent = 50),
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        shadowElevation = toolbarElevation,
-        tonalElevation = toolbarElevation,
+        color = color,
+        shadowElevation = shadowElevation,
+        tonalElevation = tonalElevation,
+        border = border,
         modifier = modifier
     ) {
         Row(

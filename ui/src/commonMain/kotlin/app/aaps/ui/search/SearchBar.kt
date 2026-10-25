@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.VisualTransformation
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigationevent.NavigationEventInfo
 import androidx.navigationevent.compose.NavigationBackHandler
@@ -48,6 +49,7 @@ import app.aaps.core.ui.compose.stringResource
  * @param onClearClick Called when clear button is clicked
  * @param onActiveChange Called when active state changes
  * @param modifier Modifier for the component
+ * @param height Height of the pill
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -57,7 +59,8 @@ fun M3SearchBar(
     onQueryChange: (String) -> Unit,
     onClearClick: () -> Unit,
     onActiveChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    height: Dp = 48.dp
 ) {
     val focusRequester = remember { FocusRequester() }
     val focusManager = LocalFocusManager.current
@@ -86,7 +89,7 @@ fun M3SearchBar(
     Surface(
         modifier = modifier
             .fillMaxWidth()
-            .height(48.dp),
+            .height(height),
         shape = MaterialTheme.shapes.extraLarge,
         color = MaterialTheme.colorScheme.surfaceContainerHigh,
         contentColor = MaterialTheme.colorScheme.onSurface

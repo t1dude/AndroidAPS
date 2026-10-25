@@ -52,4 +52,25 @@ object AapsSpacing {
     val chipHeight = 35.dp
     val chipIconSize = 24.dp
     val chipProgressHeight = 3.dp
+
+    // Circle home screen
+    val homeCircleSize = 156.dp
+    val homeCircleMinSize = 104.dp
+    val homePillHeight = 40.dp
+    val homePillWidth = 104.dp
+    val homePillIconSize = 20.dp
+    /** Free space at each side of the chip row: room for the edit pencil, kept on both sides to stay centred. */
+    val homeChipRowSideSpace = 36.dp
+    val homeToolbarHeight = 60.dp
+    val homeSearchBarHeight = 40.dp
+
+    /** From this width the Circle home screen puts the circle panel and the graphs side by side. */
+    val homeSideBySideMinWidth = 600.dp
+
+    /** Width of the circle column when side by side, the width of a phone. Never more than half the screen. */
+    val homeSideBySideCircleWidth = 412.dp
+    val homeToolbarIconSize = 30.dp
+
+    /** The row of chips under the circle is drawn at this part of the normal size. */
+    const val homeChipScale = 0.8f
 }

@@ -50,9 +50,11 @@ import com.patrykandpatrick.vico.compose.cartesian.data.CartesianLayerRangeProvi
 import com.patrykandpatrick.vico.compose.cartesian.data.lineModel
 import com.patrykandpatrick.vico.compose.cartesian.decoration.Decoration
 import com.patrykandpatrick.vico.compose.cartesian.marker.CartesianMarkerController
+import com.patrykandpatrick.vico.compose.cartesian.decoration.HorizontalLine
 import com.patrykandpatrick.vico.compose.cartesian.layer.LineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.layer.rememberLineCartesianLayer
 import com.patrykandpatrick.vico.compose.cartesian.rememberCartesianChart
+import com.patrykandpatrick.vico.compose.common.DashedShape
 import com.patrykandpatrick.vico.compose.common.Fill
 import com.patrykandpatrick.vico.compose.common.component.LineComponent
 import com.patrykandpatrick.vico.compose.common.component.ShapeComponent
@@ -161,6 +163,13 @@ fun BgGraphCompose(
     derivedTimeRange: Pair<Long, Long>?,
     nowTimestamp: Long,
     visibleTimeRange: Pair<Long, Long>? = null,
+    /** False hides the hour labels under the graph. The hour lines stay. */
+    showTimeLabels: Boolean = true,
+    /**
+     * Circle home screen: readings in the soft watchface colors, the target range drawn as two thin
+     * lines (high mark amber, low mark red) instead of a green band, and the lighter axis style.
+     */
+    softColors: Boolean = false,
     /** Press and hold to see the values at a reading. Null turns it off. */
     inspect: GraphInspectState? = null,
     modifier: Modifier = Modifier
@@ -199,9 +208,9 @@ fun BgGraphCompose(
 
     // Colors from theme (stable - won't change)
     val regularColor = AapsTheme.generalColors.originalBgValue
-    val lowColor = AapsTheme.generalColors.bgLow
-    val inRangeColor = AapsTheme.generalColors.bgInRange
-    val highColor = AapsTheme.generalColors.bgHigh
+    val lowColor = if (softColors) AapsTheme.generalColors.circleCritical else AapsTheme.generalColors.bgLow
+    val inRangeColor = if (softColors) AapsTheme.generalColors.circleNormal else AapsTheme.generalColors.bgInRange
+    val highColor = if (softColors) AapsTheme.generalColors.circleWarning else AapsTheme.generalColors.bgHigh
     val basalColor = AapsTheme.elementColors.tempBasal
     val targetLineColor = AapsTheme.elementColors.tempTarget
     val activityColor = AapsTheme.elementColors.activity
@@ -462,14 +471,31 @@ fun BgGraphCompose(
         InRangeBand(low = lowMark, high = highMark, color = inRangeColor.copy(alpha = 0.2f))
     }
 
+    // Soft colors: a thin dotted line at each mark instead of the band, as thin as the target line
+    val highMarkLine = remember(highMark, highColor) {
+        HorizontalLine(
+            y = { highMark },
+            line = LineComponent(fill = Fill(highColor), thickness = 1.dp, shape = DashedShape(dashLength = 2.dp, gapLength = 3.dp)),
+            verticalAxisPosition = Axis.Position.Vertical.Start
+        )
+    }
+    val lowMarkLine = remember(lowMark, lowColor) {
+        HorizontalLine(
+            y = { lowMark },
+            line = LineComponent(fill = Fill(lowColor), thickness = 1.dp, shape = DashedShape(dashLength = 2.dp, gapLength = 3.dp)),
+            verticalAxisPosition = Axis.Position.Vertical.Start
+        )
+    }
+
     val inspectMarker = remember(inspect) { inspect?.let { SilentInspectMarker } }
     // Always called, so the composable calls do not depend on inspect
     val defaultMarkerController = CartesianMarkerController.rememberShowOnPress()
-    val inspectLine = rememberInspectLine(inspect, dotOnReading = true)
+    val inspectLine = rememberInspectLine(inspect, dotOnReading = true, soft = softColors)
 
     val clockChanges = rememberClockChangeDecoration(minTimestamp, maxTimestamp, showIcon = true)
-    val decorations = remember(inRangeBox, nowLine, clockChanges, inspectLine) {
-        listOfNotNull(inRangeBox, nowLine, clockChanges, inspectLine)
+    val decorations = remember(softColors, inRangeBox, highMarkLine, lowMarkLine, nowLine, clockChanges, inspectLine) {
+        if (softColors) listOfNotNull(highMarkLine, lowMarkLine, nowLine, clockChanges, inspectLine)
+        else listOfNotNull(inRangeBox, nowLine, clockChanges, inspectLine)
     }
 
     // =========================================================================
@@ -485,6 +511,15 @@ fun BgGraphCompose(
     // =========================================================================
     // Chart — multi layer
     // =========================================================================
+
+    // Circle home screen style: smaller grey axis labels, faint horizontal lines only (no hour lines)
+    val axisLabelStyle = if (softColors) {
+        TextStyle(color = MaterialTheme.colorScheme.onSurfaceVariant, fontSize = MaterialTheme.typography.labelSmall.fontSize)
+    } else TextStyle(color = MaterialTheme.colorScheme.onSurface)
+    val yGuideline = LineComponent(
+        fill = Fill(if (softColors) MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.25f) else AapsTheme.generalColors.graphGrid)
+    )
+    val xGuideline = if (softColors) null else LineComponent(fill = Fill(AapsTheme.generalColors.graphGrid))
 
     CartesianChartHost(
         chart = rememberCartesianChart(
@@ -527,18 +562,24 @@ fun BgGraphCompose(
             startAxis = VerticalAxis.rememberStart(
                 itemPlacer = remember { NiceVerticalAxisItemPlacer() },
                 label = rememberTextComponent(
-                    style = TextStyle(color = MaterialTheme.colorScheme.onSurface),
+                    style = axisLabelStyle,
                     minWidth = TextComponent.MinWidth.fixed(30.dp)
                 ),
-                guideline = LineComponent(fill = Fill(AapsTheme.generalColors.graphGrid))
+                guideline = yGuideline
             ),
-            bottomAxis = HorizontalAxis.rememberBottom(
+            bottomAxis = if (showTimeLabels) HorizontalAxis.rememberBottom(
                 valueFormatter = timeFormatter,
                 itemPlacer = bottomAxisItemPlacer,
                 label = rememberTextComponent(
-                    style = TextStyle(color = MaterialTheme.colorScheme.onSurface)
+                    style = axisLabelStyle
                 ),
-                guideline = LineComponent(fill = Fill(AapsTheme.generalColors.graphGrid))
+                guideline = xGuideline
+            ) else HorizontalAxis.rememberBottom(
+                valueFormatter = timeFormatter,
+                itemPlacer = bottomAxisItemPlacer,
+                label = null,
+                tick = null,
+                guideline = xGuideline
             ),
             decorations = decorations,
             getXStep = { _, _, _ -> 1.0 },

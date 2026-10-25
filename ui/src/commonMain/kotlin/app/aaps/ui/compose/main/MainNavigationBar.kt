@@ -64,7 +64,9 @@ fun MainNavigationBar(
     permissionsMissing: Boolean = false,
     onPermissionsClick: () -> Unit = {},
     loopActionAvailable: Boolean = false,
-    onLoopActionClick: () -> Unit = {}
+    onLoopActionClick: () -> Unit = {},
+    /** False hides Treatments, Scenes and Manage (Circle home screen: they live in the quick launch toolbar). */
+    showMenuButtons: Boolean = true
 ) {
     val navColors = NavigationBarItemDefaults.colors(
         selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -84,7 +86,7 @@ fun MainNavigationBar(
     ) {
         // Treatment action button (opens bottom sheet) — hidden on an unpaired client (its bolus/carbs
         // ride the Client-Control channel and would be dropped); always shown on a master.
-        if (masterOrPairedClient && role.allows(ElementType.TREATMENT.role)) {
+        if (showMenuButtons && masterOrPairedClient && role.allows(ElementType.TREATMENT.role)) {
             NavigationBarItem(
                 selected = false,
                 modifier = Modifier.badgeState(
@@ -116,7 +118,7 @@ fun MainNavigationBar(
         // Scenes/automation button — visible whenever scenes or automation items exist on a paired
         // client (regardless of pump/loop/profile state). The badge counts only items the user can act
         // on right now; gated items are visible inside the sheet, dimmed with reason.
-        if (masterOrPairedClient && role.allows(ElementType.SCENE.role) && automationTotal > 0) {
+        if (showMenuButtons && masterOrPairedClient && role.allows(ElementType.SCENE.role) && automationTotal > 0) {
             NavigationBarItem(
                 selected = false,
                 modifier = Modifier.badgeState(
@@ -146,18 +148,20 @@ fun MainNavigationBar(
         }
 
         // Manage action button (opens bottom sheet)
-        NavigationBarItem(
-            selected = false,
-            onClick = onManageClick,
-            icon = {
-                Icon(
-                    imageVector = Icons.Default.ManageAccounts,
-                    contentDescription = stringResource(CoreUiStrings.manage)
-                )
-            },
-            label = { Text(text = stringResource(CoreUiStrings.manage), textAlign = TextAlign.Center) },
-            colors = navColors
-        )
+        if (showMenuButtons) {
+            NavigationBarItem(
+                selected = false,
+                onClick = onManageClick,
+                icon = {
+                    Icon(
+                        imageVector = Icons.Default.ManageAccounts,
+                        contentDescription = stringResource(CoreUiStrings.manage)
+                    )
+                },
+                label = { Text(text = stringResource(CoreUiStrings.manage), textAlign = TextAlign.Center) },
+                colors = navColors
+            )
+        }
 
         // Pump setup (visible only when pump not initialized and has compose content)
         if (pumpSetupPlugin != null) {

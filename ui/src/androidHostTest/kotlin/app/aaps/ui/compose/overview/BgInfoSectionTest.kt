@@ -2,17 +2,23 @@ package app.aaps.ui.compose.overview
 
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.v2.createComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.unit.Density
+import androidx.compose.ui.unit.Dp
 import app.aaps.core.data.model.TrendArrow
 import app.aaps.core.interfaces.overview.graph.BgInfoData
 import app.aaps.core.interfaces.overview.graph.BgRange
 import app.aaps.core.interfaces.resources.TextRefIdRegistry
+import app.aaps.core.ui.compose.AapsSpacing
 import app.aaps.ui.UiStringIds
+import com.google.common.truth.Truth.assertThat
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -205,5 +211,42 @@ class BgInfoSectionTest {
         }
 
         compose.onAllNodesWithText("120").assertCountEquals(arrows.size)
+    }
+
+    /** Height of the three text lines and the room inside the ring, for a small circle and a large font. */
+    private fun measureSmallCircle(textReferenceSize: Dp?): Pair<Dp, Dp> {
+        val size = AapsSpacing.homeCircleMinSize
+        compose.setContent {
+            val density = LocalDensity.current
+            CompositionLocalProvider(LocalDensity provides Density(density.density, fontScale = 1.3f)) {
+                MaterialTheme {
+                    BgInfoSection(
+                        bgInfo = bgInfo(bgText = "10.5", deltaText = "-1.0"),
+                        timeAgoText = "7m ago",
+                        size = size,
+                        textReferenceSize = textReferenceSize
+                    )
+                }
+            }
+        }
+        // In px: getBoundsInRoot() would convert with the scaled density of the text. The unmerged tree: the
+        // circle merges its texts into one screen reader node, and that node has the size of the whole circle.
+        val top = compose.onNodeWithText("-1.0", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.top
+        val bottom = compose.onNodeWithText("7m ago", useUnmergedTree = true).fetchSemanticsNode().boundsInRoot.bottom
+        val textHeight = with(compose.density) { (bottom - top).toDp() }
+        return textHeight to (size - AapsSpacing.bgRingStrokeWidth * 2)
+    }
+
+    @Test
+    fun textFitsInsideSmallCircleWhenScaled() {
+        val (textHeight, room) = measureSmallCircle(textReferenceSize = AapsSpacing.homeCircleSize)
+        assertThat(textHeight.value).isAtMost(room.value)
+    }
+
+    @Test
+    fun textDoesNotFitInsideSmallCircleWithoutScaling() {
+        // Shows the problem the scaling fixes (seen on a Galaxy Z Flip 7)
+        val (textHeight, room) = measureSmallCircle(textReferenceSize = null)
+        assertThat(textHeight.value).isGreaterThan(room.value)
     }
 }

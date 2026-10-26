@@ -65,6 +65,7 @@ class G7GattClient(
     @Volatile var quietUntil = 0L
 
     private val listeners = ConcurrentHashMap<G7Characteristic, (ByteArray) -> Unit>()
+    private val subscribedWith = ConcurrentHashMap<G7Characteristic, String>()
     private val operationLock = Mutex()
     @Volatile private var pending: CompletableDeferred<Int>? = null
 
@@ -105,7 +106,13 @@ class G7GattClient(
             }
             return connect(autoConnect = true)
         }
-        runCatching { g.connect() }.onFailure { log("Re-arming the connection failed: ${it.message}") }
+        val accepted = runCatching { g.connect() }.onFailure { log("Re-arming the connection failed: ${it.message}") }.getOrDefault(false)
+        if (!accepted) {
+            log("Bluetooth did not accept the re-armed connection; opening a new connection request")
+            runCatching { g.close() }
+            gatt = null
+            connect(autoConnect = true)
+        }
     }
 
     fun disconnect() {
@@ -119,6 +126,7 @@ class G7GattClient(
         runCatching { gatt?.close() }
         gatt = null
         listeners.clear()
+        subscribedWith.clear()
     }
 
     /** Removes the Android bond with this sensor. For a bond the sensor no longer knows. */
@@ -207,10 +215,13 @@ class G7GattClient(
             val target = characteristic(characteristic)
             if (!g.setCharacteristicNotification(target, true)) throw G7LinkException("Could not enable notifications for $characteristic")
             val descriptor = target.getDescriptor(UUID.fromString(G7Gatt.CLIENT_CHARACTERISTIC_CONFIG)) ?: throw G7LinkException("$characteristic has no configuration descriptor")
-            // iOS picks indications or notifications by itself; here we have to choose.
-            val value =
-                if (target.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE
-                else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
+            // iOS picks indications or notifications by itself; here we have to choose. Indications where
+            // offered, except on the certificate stream: a Dexcom ONE+ offers both there, and with
+            // indications it sends the first piece of the key exchange and then drops the link.
+            val canNotify = target.properties and BluetoothGattCharacteristic.PROPERTY_NOTIFY != 0
+            val canIndicate = target.properties and BluetoothGattCharacteristic.PROPERTY_INDICATE != 0
+            val indicate = canIndicate && !(characteristic == G7Characteristic.CERTIFICATE && canNotify)
+            val value = if (indicate) BluetoothGattDescriptor.ENABLE_INDICATION_VALUE else BluetoothGattDescriptor.ENABLE_NOTIFICATION_VALUE
             val status = issueAndWait(characteristic.name + " subscribe") {
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     g.writeDescriptor(descriptor, value) == BluetoothStatusCodes.SUCCESS
@@ -222,7 +233,20 @@ class G7GattClient(
                 }
             }
             checkStatus(status, "Subscribing to $characteristic")
+            subscribedWith[characteristic] = if (indicate) "indicate" else "notify"
         }
+    }
+
+    override fun describe(characteristic: G7Characteristic): String {
+        val target = runCatching { characteristic(characteristic) }.getOrNull() ?: return "$characteristic not found"
+        val offered = listOf(
+            BluetoothGattCharacteristic.PROPERTY_READ to "read",
+            BluetoothGattCharacteristic.PROPERTY_WRITE to "write",
+            BluetoothGattCharacteristic.PROPERTY_WRITE_NO_RESPONSE to "writeWithoutResponse",
+            BluetoothGattCharacteristic.PROPERTY_NOTIFY to "notify",
+            BluetoothGattCharacteristic.PROPERTY_INDICATE to "indicate"
+        ).filter { target.properties and it.first != 0 }.joinToString(",") { it.second }
+        return "$characteristic [$offered]" + (subscribedWith[characteristic]?.let { " using $it" } ?: "")
     }
 
     override suspend fun write(characteristic: G7Characteristic, value: ByteArray, withResponse: Boolean) {

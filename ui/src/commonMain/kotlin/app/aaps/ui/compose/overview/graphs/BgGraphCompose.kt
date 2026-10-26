@@ -492,7 +492,7 @@ fun BgGraphCompose(
     val defaultMarkerController = CartesianMarkerController.rememberShowOnPress()
     val inspectLine = rememberInspectLine(inspect, dotOnReading = true, soft = softColors)
 
-    val clockChanges = rememberClockChangeDecoration(minTimestamp, maxTimestamp, showIcon = true)
+    val clockChanges = rememberClockChangeDecoration(minTimestamp, maxTimestamp, bgReadings, showIcon = true)
     val decorations = remember(softColors, inRangeBox, highMarkLine, lowMarkLine, nowLine, clockChanges, inspectLine) {
         if (softColors) listOfNotNull(highMarkLine, lowMarkLine, nowLine, clockChanges, inspectLine)
         else listOfNotNull(inRangeBox, nowLine, clockChanges, inspectLine)

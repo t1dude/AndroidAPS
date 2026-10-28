@@ -19,7 +19,7 @@ private const val PLUGIN_START_WAIT_MS = 60_000L
  * enable, then the running mode check. Called once per process by `WatchEngine`; kept here so a test can run
  * the same start on a graph of its own.
  *
- * [setRunningMode] runs after the plugins start and before the running mode check. A snapshot brings the
+ * [setRunningMode] runs after init has completed and before the running mode check. A snapshot brings the
  * mode the phone set for the move out (loop disabled), and for that mode the check cancels the temporary
  * basal the pump runs. So the engine sets its own mode first. When [setRunningMode] returns false, the
  * check does not start: the engine sends no pump command for a mode nobody chose on the watch.
@@ -47,13 +47,15 @@ internal suspend fun EngineGraph.startEngine(settings: Map<String, String>?, set
     val pluginsStarted = configBuilder.initialize()
     if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
         aapsLogger.warn(LTag.CORE, "Engine: plugins did not finish starting within $PLUGIN_START_WAIT_MS ms")
+    runningModeExpiryScheduler.start()
+    // Before the mode: there is no profile until init has completed (ProfileFunction), and the mode needs
+    // one. Nothing runs the loop before EventAppInitialized: the engine takes readings only after this start.
+    config.initCompleted()
     if (setRunningMode()) runningModeReconciler.start()
     else {
         aapsLogger.warn(LTag.CORE, "Engine: running mode not set, the running mode check does not start")
         medtrumWatchLink.note("Engine: running mode not set, the running mode check does not start")
     }
-    runningModeExpiryScheduler.start()
-    config.initCompleted()
     rxBus.send(EventAppInitialized())
     aapsLogger.info(LTag.CORE, "Engine started with ${pluginStore.plugins.size} plugins")
     // A line for the test log only: it must never stop the start

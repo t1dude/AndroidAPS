@@ -233,8 +233,8 @@ object WatchEngine {
     private suspend fun openLoop(graph: EngineGraph): Boolean = try {
         val profile = graph.profileFunction.getProfile()
         if (profile == null) {
-            graph.aapsLogger.warn(LTag.CORE, "Engine: no profile in the snapshot, the loop stays as it was")
-            graph.medtrumWatchLink.note("Engine: no profile in the snapshot, the loop stays as it was")
+            graph.aapsLogger.warn(LTag.CORE, "Engine: no profile, the loop stays as it was")
+            graph.medtrumWatchLink.note("Engine: no profile, the loop stays as it was")
             false
         } else {
             val done = graph.loop.handleRunningModeChange(RM.Mode.OPEN_LOOP, Action.OPEN_LOOP_MODE, Sources.Aaps, profile = profile)

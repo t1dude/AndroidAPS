@@ -20,7 +20,10 @@ interface NSAndroidClient {
         val values: T,
         // Only populated by the entries reads (getSgvsNewerThan / getSgvsModifiedSince): the AAPS
         // calibration `mbg` entries fetched in the same pass, so they share the single entries cursor.
-        val calibrations: List<NSMbgV3> = emptyList()
+        val calibrations: List<NSMbgV3> = emptyList(),
+        // Only populated by the treatments reads: one message for each record in the page that could
+        // not be read. Those records are left out of `values`; the rest of the page is kept.
+        val skipped: List<String> = emptyList()
     )
 
     val lastStatus: Status?

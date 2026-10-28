@@ -41,6 +41,7 @@ import app.aaps.core.nssdk.remotemodel.LastModified
 import app.aaps.plugins.sync.SyncStringsValues
 import app.aaps.plugins.sync.nsclientV3.clientcontrol.AuthorizedClientsRepository
 import app.aaps.plugins.sync.nsclientV3.clientcontrol.OrphanDetector
+import app.aaps.plugins.sync.nsclientV3.keys.NsclientBooleanKey
 import app.aaps.plugins.sync.nsclientV3.keys.NsclientStringKey
 import app.aaps.plugins.sync.nsclientV3.ws.NsConnection
 import app.aaps.plugins.sync.nsclientV3.ws.NsLoadExecutor
@@ -780,6 +781,36 @@ internal class NSClientV3PluginTest : TestBaseWithProfile() {
         // 2. Verify that the empty state was written to preferences to make the reset persistent.
         verify(preferences).put(NsclientStringKey.V3LastModified, expectedEmptyLastModifiedJson)
         verify(dataSyncSelectorV3).resetToNextFullSync()
+        // 3. The request is also on disk, so a restart before the sync ends goes on with it.
+        verify(preferences).put(NsclientBooleanKey.FullSyncPending, true)
+    }
+
+    @Test
+    fun `endFullSync clears the full sync request on disk`() {
+        sut.doingFullSync = true
+
+        sut.endFullSync()
+
+        assertThat(sut.doingFullSync).isFalse()
+        verify(preferences).put(NsclientBooleanKey.FullSyncPending, false)
+    }
+
+    /**
+     * A full sync cut short by a restart must go on as a full sync. Its cursors were reset on disk, so
+     * without this it went on as a normal first load: it wrote a user entry for every record it stored
+     * and, with the old 10 ms pause per entry, took about 5 s for every 500 records.
+     */
+    @Test
+    fun `a full sync cut short by a restart is asked for again on start`() {
+        val lastModified = Json.encodeToString(LastModified.serializer(), LastModified(LastModified.Collections()))
+        whenever(preferences.get(NsclientStringKey.V3LastModified)).thenReturn(lastModified)
+        whenever(preferences.get(NsclientBooleanKey.FullSyncPending)).thenReturn(true)
+        whenever(receiverDelegate.blockingReason).thenReturn("Block")
+
+        sut.setPluginEnabledBlocking(PluginType.SYNC, true)
+
+        // The loop may already have taken the request and started the full sync.
+        assertThat(sut.fullSyncRequested.load() || sut.doingFullSync).isTrue()
     }
 
     @Test

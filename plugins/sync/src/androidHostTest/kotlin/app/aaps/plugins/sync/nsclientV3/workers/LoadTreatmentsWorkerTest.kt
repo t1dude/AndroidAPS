@@ -39,7 +39,9 @@ import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.ArgumentMatchers.anyString
 import org.mockito.Mock
 import org.mockito.kotlin.anyOrNull
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.mock
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import kotlin.reflect.KClass
 import kotlin.test.assertIs
@@ -121,6 +123,27 @@ internal class LoadTreatmentsWorkerTest : TestBaseWithProfile() {
         val result = sut.doWorkAndLog()
 
         assertThat(nsClientV3Plugin.lastLoadedSrvModified.collections.treatments).isEqualTo(now - 1000)
+        assertIs<ListenableWorker.Result.Success>(result)
+    }
+
+    /**
+     * A page where no record could be read is not the end of the data. Before, such a page came back
+     * as an empty list, the first load was ended here, and everything after it was never loaded.
+     */
+    @Test
+    fun `first load with only unreadable records does not end the first load`() = runTest(timeout = 30.seconds) {
+        nsClientV3Plugin.nsAndroidClient = nsAndroidClient
+        nsClientV3Plugin.lastLoadedSrvModified.collections.treatments = 0L // first load
+        nsClientV3Plugin.firstLoadContinueTimestamp.collections.treatments = now - 1000
+        nsClientV3Plugin.newestDataOnServer?.collections?.treatments = now // the server has newer data
+        sut = buildSut()
+        whenever(nsAndroidClient.getTreatmentsNewerThan(anyString(), anyInt()))
+            .thenReturn(NSAndroidClient.ReadResponse(200, 0, emptyList(), skipped = listOf("\"id-1\": bad value")))
+
+        val result = sut.doWorkAndLog()
+
+        assertThat(nsClientV3Plugin.lastLoadedSrvModified.collections.treatments).isEqualTo(0L)
+        verify(nsClientRepository).addLog(eq("◄ ERROR"), eq("1 TRs could not be read: \"id-1\": bad value"))
         assertIs<ListenableWorker.Result.Success>(result)
     }
 

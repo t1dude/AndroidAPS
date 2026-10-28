@@ -30,6 +30,7 @@ import app.aaps.core.nssdk.mapper.toTreatment
 import app.aaps.core.nssdk.networking.NsHttpResponse
 import app.aaps.core.nssdk.networking.NsKtorClient
 import app.aaps.core.nssdk.networking.NsUrl
+import app.aaps.core.nssdk.nsSdkJson
 import app.aaps.core.nssdk.remotemodel.LastModified
 import app.aaps.core.nssdk.remotemodel.RemoteDeviceStatus
 import app.aaps.core.nssdk.remotemodel.RemoteEntry
@@ -41,6 +42,7 @@ import app.aaps.core.nssdk.utils.retry
 import app.aaps.core.nssdk.utils.toNotNull
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
@@ -166,7 +168,7 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = 0,
-                values = response.body()?.result?.map(RemoteEntry::toSgv).toNotNull()
+                values = response.readBody()?.result?.map(RemoteEntry::toSgv).toNotNull()
                 // no calibrations: this endpoint is server-filtered to type=sgv
             )
         } else if (response.code in 400..499)
@@ -183,8 +185,8 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = eTag,
-                values = response.body()?.result?.map(RemoteEntry::toSgv).toNotNull(),
-                calibrations = response.body()?.result?.mapNotNull(RemoteEntry::toCalibrationMbg) ?: emptyList()
+                values = response.readBody()?.result?.map(RemoteEntry::toSgv).toNotNull(),
+                calibrations = response.readBody()?.result?.mapNotNull(RemoteEntry::toCalibrationMbg) ?: emptyList()
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -199,8 +201,8 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = 0,
-                values = response.body()?.result?.map(RemoteEntry::toSgv).toNotNull(),
-                calibrations = response.body()?.result?.mapNotNull(RemoteEntry::toCalibrationMbg) ?: emptyList()
+                values = response.readBody()?.result?.map(RemoteEntry::toSgv).toNotNull(),
+                calibrations = response.readBody()?.result?.mapNotNull(RemoteEntry::toCalibrationMbg) ?: emptyList()
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -341,10 +343,12 @@ class NSAndroidClientImpl(
 
         val response = api.getTreatmentsNewerThan(createdAt, limit)
         if (response.isSuccessful) {
+            val page = decodeTreatments(response.readBody()?.result)
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = 0,
-                values = response.body()?.result?.map(RemoteTreatment::toTreatment).toNotNull()
+                values = page.values,
+                skipped = page.skipped
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -357,9 +361,9 @@ class NSAndroidClientImpl(
         val response = api.getTreatmentsModifiedSince(from, limit)
         if (response.isSuccessful) {
             val eTag = response.eTagAsLong()
+            val page = decodeTreatments(response.readBody()?.result)
             return@callWrapper NSAndroidClient.ReadResponse(
-                code = response.code, lastServerModified = eTag, values = response.body()?.result?.map
-                    (RemoteTreatment::toTreatment).toNotNull()
+                code = response.code, lastServerModified = eTag, values = page.values, skipped = page.skipped
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -371,7 +375,7 @@ class NSAndroidClientImpl(
 
         val response = api.getDeviceStatusModifiedSince(from, limit)
         if (response.isSuccessful) {
-            return@callWrapper response.body()?.result?.map(RemoteDeviceStatus::toNSDeviceStatus).toNotNull()
+            return@callWrapper response.readBody()?.result?.map(RemoteDeviceStatus::toNSDeviceStatus).toNotNull()
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
         else
@@ -471,7 +475,7 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = 0,
-                values = response.body()?.result?.map(RemoteFood::toNSFood).toNotNull()
+                values = response.readBody()?.result?.map(RemoteFood::toNSFood).toNotNull()
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -571,7 +575,7 @@ class NSAndroidClientImpl(
         val response = api.getLastProfile()
         if (response.isSuccessful) {
             val eTag = response.eTagAsLong()
-            return@callWrapper NSAndroidClient.ReadResponse(code = response.code, lastServerModified = eTag, values = response.body()?.result.toNotNull())
+            return@callWrapper NSAndroidClient.ReadResponse(code = response.code, lastServerModified = eTag, values = response.readBody()?.result.toNotNull())
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
         else
@@ -583,7 +587,7 @@ class NSAndroidClientImpl(
         val response = api.getProfileModifiedSince(from)
         if (response.isSuccessful) {
             val eTag = response.eTagAsLong()
-            return@callWrapper NSAndroidClient.ReadResponse(code = response.code, lastServerModified = eTag, values = response.body()?.result.toNotNull())
+            return@callWrapper NSAndroidClient.ReadResponse(code = response.code, lastServerModified = eTag, values = response.readBody()?.result.toNotNull())
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
         else
@@ -598,7 +602,7 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = eTag,
-                values = response.body()?.result
+                values = response.readBody()?.result
             )
         } else if (response.code == 404) {
             return@callWrapper NSAndroidClient.ReadResponse(code = 404, lastServerModified = null, values = null)
@@ -616,7 +620,7 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = eTag,
-                values = response.body()?.result.toNotNull()
+                values = response.readBody()?.result.toNotNull()
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -632,7 +636,7 @@ class NSAndroidClientImpl(
             return@callWrapper NSAndroidClient.ReadResponse(
                 code = response.code,
                 lastServerModified = eTag,
-                values = response.body()?.result.toNotNull()
+                values = response.readBody()?.result.toNotNull()
             )
         } else if (response.code in 400..499)
             throw InvalidParameterNightscoutException(response.errorBody() ?: response.message())
@@ -783,6 +787,26 @@ class NSAndroidClientImpl(
     private fun <T> NsHttpResponse<T>.successBody(): T {
         throwIfFailed()
         return body() ?: throw UnsuccessfulNightscoutException("Response has no body")
+    }
+
+    private class TreatmentPage(val values: List<NSTreatment>, val skipped: List<String>)
+
+    /**
+     * Decodes a page of treatments one record at a time. A record that cannot be read is left out
+     * and reported in [TreatmentPage.skipped]; it does not cost the other records of the page.
+     */
+    private fun decodeTreatments(elements: List<JsonElement>?): TreatmentPage {
+        val values = mutableListOf<NSTreatment>()
+        val skipped = mutableListOf<String>()
+        elements.orEmpty().forEach { element ->
+            try {
+                nsSdkJson.decodeFromJsonElement(RemoteTreatment.serializer(), element).toTreatment()?.let { values.add(it) }
+            } catch (e: IllegalArgumentException) {
+                val identifier = (element as? JsonObject)?.get("identifier")
+                skipped.add("$identifier: ${e.message}")
+            }
+        }
+        return TreatmentPage(values, skipped)
     }
 
     private suspend fun <T> callWrapper(dispatcher: CoroutineDispatcher, block: suspend () -> T): T =

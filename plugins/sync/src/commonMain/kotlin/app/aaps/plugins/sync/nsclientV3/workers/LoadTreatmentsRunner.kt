@@ -59,7 +59,16 @@ class LoadTreatmentsRunner(
                     }
                     treatments = response.values
                     aapsLogger.debug(LTag.NSCLIENT, "TREATMENTS: $treatments")
-                    if (treatments.isNotEmpty()) {
+                    if (response.skipped.isNotEmpty()) {
+                        response.skipped.forEach { aapsLogger.error(LTag.NSCLIENT, "Skipped NS treatment $it") }
+                        nsClientRepository.addLog("◄ ERROR", "${response.skipped.size} TRs could not be read: ${response.skipped.first()}")
+                    }
+                    if (treatments.isEmpty() && response.skipped.isNotEmpty()) {
+                        // Not the end of the data: the page had records, none of them readable. Ending the
+                        // first load here would silently skip everything after them. Stop without ending
+                        // it, so the error stays visible and the same page is tried again next round.
+                        continueLoading = false
+                    } else if (treatments.isNotEmpty()) {
                         val action = if (isFirstLoad) "RCV-F" else "RCV"
                         nsClientRepository.addLog("◄ $action", "${treatments.size} TRs from ${dateUtil.dateAndTimeAndSecondsString(lastLoaded)}")
                         // Schedule processing of fetched data and continue of loading

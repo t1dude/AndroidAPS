@@ -40,6 +40,7 @@ import org.junit.jupiter.api.Test
 import org.mockito.Mock
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argThat
+import org.mockito.kotlin.eq
 import org.mockito.kotlin.never
 import org.mockito.kotlin.times
 import org.mockito.kotlin.verify
@@ -507,6 +508,35 @@ class NsIncomingDataProcessorTest : TestBaseWithProfile() {
 
         processor.processTreatments(treatments, doFullSync = false)
         verify(storeDataForDb, never()).addToTemporaryTargets(any())
+    }
+
+    /**
+     * A record that cannot be stored costs only itself. Before, the first one ended the loop: the rest
+     * of the page was dropped, the first-load cursor did not move, and the load stopped there. Here
+     * the bad record is a temp basal with duration 0, which `TB` refuses (`require(duration > 0)`).
+     */
+    @Test
+    fun `processTreatments skips a record that cannot be stored and keeps the rest`() {
+        whenever(preferences.get(BooleanKey.NsClientAcceptTbrEb)).thenReturn(true)
+        whenever(preferences.get(BooleanKey.NsClientAcceptCarbs)).thenReturn(true)
+        val badTime = now - T.mins(20).msecs()
+        val carbTime = now - T.mins(10).msecs()
+        val treatments = listOf<NSTreatment>(
+            NSTemporaryBasal(
+                identifier = "zero_duration", date = badTime, isValid = true, eventType = EventType.TEMPORARY_BASAL,
+                notes = null, duration = 0, absolute = 0.0, percent = null, rate = 0.0, utcOffset = null,
+                pumpId = null, endId = null, pumpType = null, pumpSerial = null, isAbsolute = true,
+                type = NSTemporaryBasal.Type.NORMAL
+            ),
+            carbsAt(carbTime)
+        )
+
+        val result = processor.processTreatments(treatments, doFullSync = false, advanceInitialLoadCursor = true)
+
+        assertTrue(result)
+        verify(storeDataForDb).addToCarbs(any())
+        verify(nsClient).updateLatestTreatmentReceivedIfNewer(carbTime)
+        verify(nsClientRepository).addLog(eq("◄ ERROR"), argThat { startsWith("1 TRs could not be stored") })
     }
 
     @Test

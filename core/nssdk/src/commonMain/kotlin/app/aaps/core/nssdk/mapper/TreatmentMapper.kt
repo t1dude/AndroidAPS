@@ -169,7 +169,9 @@ internal fun RemoteTreatment.toTreatment(): NSTreatment? {
 
             this.absolute ?: this.percent ?: return null
             val durationInMilliseconds = this.durationInMilliseconds ?: this.duration?.let { this.duration.minutes.inWholeMilliseconds } ?: return null
-            if (this.durationInMilliseconds == 0L) return null
+            // The computed value, not the raw field: Trio writes a cancelled temp basal as "duration": 0 with no
+            // durationInMilliseconds, and a TB with duration 0 cannot be built further on.
+            if (durationInMilliseconds == 0L) return null
 
             return NSTemporaryBasal(
                 date = treatmentTimestamp,

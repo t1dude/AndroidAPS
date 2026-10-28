@@ -23,6 +23,7 @@ import io.ktor.http.contentType
 import io.ktor.http.takeFrom
 import kotlinx.serialization.DeserializationStrategy
 import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -143,7 +144,12 @@ internal class NightscoutApi(
 
     // ---------------------------------------------------------------- treatments
 
-    private val treatmentListSerializer = NSResponse.serializer(ListSerializer(RemoteTreatment.serializer()))
+    /**
+     * Treatment pages are read as raw JSON and decoded one record at a time by the client
+     * (`NSAndroidClientImpl.decodeTreatments`), so a record that cannot be read costs only itself.
+     * Decoded as a list of [RemoteTreatment], one bad record made the whole page of 500 unreadable.
+     */
+    private val treatmentListSerializer = NSResponse.serializer(ListSerializer(JsonElement.serializer()))
 
     suspend fun getTreatmentsNewerThan(createdAt: String, limit: Int) = call(HttpMethod.Get, treatmentListSerializer) {
         nsUrl("v3", "treatments") {

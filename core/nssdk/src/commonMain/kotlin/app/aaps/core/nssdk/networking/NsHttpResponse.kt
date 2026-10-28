@@ -1,5 +1,6 @@
 package app.aaps.core.nssdk.networking
 
+import app.aaps.core.nssdk.exceptions.InvalidFormatNightscoutException
 import app.aaps.core.nssdk.nsSdkJson
 import kotlinx.serialization.DeserializationStrategy
 
@@ -36,6 +37,23 @@ internal class NsHttpResponse<T>(
     fun body(): T? =
         if (bodyText.isEmpty()) null
         else runCatching { nsSdkJson.decodeFromString(deserializer, bodyText) }.getOrNull()
+
+    /**
+     * The decoded body of a **read**, or null for an empty body. A body that cannot be decoded
+     * throws [InvalidFormatNightscoutException].
+     *
+     * Use this, not [body], where the values are data to load. With [body] an unreadable page became
+     * null, then an empty list, and the loader took that as "no more data": the full sync stopped
+     * at the first bad record and nothing was logged. The message carries the decoder's text, which
+     * names the record and field (`$.result[346].originalDuration`).
+     */
+    fun readBody(): T? =
+        if (bodyText.isEmpty()) null
+        else try {
+            nsSdkJson.decodeFromString(deserializer, bodyText)
+        } catch (e: IllegalArgumentException) {
+            throw InvalidFormatNightscoutException("Cannot read Nightscout response: ${e.message}")
+        }
 
     /**
      * The raw text of a failed response, matching Retrofit's `errorBody()?.string()`.

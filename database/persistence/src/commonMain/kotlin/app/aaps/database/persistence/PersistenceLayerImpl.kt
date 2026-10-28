@@ -138,7 +138,6 @@ import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
@@ -160,10 +159,10 @@ class PersistenceLayerImpl(
 
     private suspend fun log(entries: List<UE>) {
         if (config.AAPSCLIENT.not())
-            if (entries.isNotEmpty()) {
-                insertUserEntries(entries)
-                delay(entries.size * 10L)
-            }
+            // No pause after the insert. The RxJava version started the insert without waiting for it and then
+            // slept 10 ms per entry to give it time. Here the insert is awaited, so that pause only added
+            // 5 s to every chunk of 500 records stored from Nightscout.
+            if (entries.isNotEmpty()) insertUserEntries(entries)
     }
 
     override suspend fun clearDatabases() = repository.clearDatabases()

@@ -124,6 +124,24 @@ class RealNightscoutTreatmentTest {
         assertThat(second).isEqualTo(first)
     }
 
+    /**
+     * Trio writes a cancelled temp basal as `"duration": 0`, with no `durationInMilliseconds`. The
+     * mapper checked the raw field, which is absent, so the record came through with duration 0, and
+     * building a `TB` from it failed `require(duration > 0)`. That stopped a full sync on a real
+     * Nightscout. Rebuilt from the values that sync logged (the raw document was not kept).
+     */
+    @Test
+    fun `a Trio temp basal cancel with duration 0 is ignored`() {
+        val json = """
+            {"_id":"6adcdd27923df98ea46aab95","identifier":"6adcdd27923df98ea46aab95",
+             "eventType":"Temp Basal","duration":0,"rate":0,"absolute":0,"temp":"absolute",
+             "enteredBy":"Trio","created_at":"2026-10-24T14:55:43.658Z","utcOffset":0,
+             "srvModified":1792859431444,"srvCreated":1792859431444}
+        """.trimIndent()
+
+        assertThat(json.toNSTreatment()).isNull()
+    }
+
     // ---------------------------------------------------------------- missing fields must not crash
 
     /**

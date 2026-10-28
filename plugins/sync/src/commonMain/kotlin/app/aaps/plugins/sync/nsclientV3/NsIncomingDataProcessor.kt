@@ -172,90 +172,24 @@ class NsIncomingDataProcessor(
     fun processTreatments(treatments: List<NSTreatment>, doFullSync: Boolean, advanceInitialLoadCursor: Boolean = false): Boolean {
         try {
             var latestDateInReceivedData: Long = 0
+            var failed = 0
+            var firstError: String? = null
             for (treatment in treatments) {
                 aapsLogger.debug(LTag.NSCLIENT, "Received NS treatment: $treatment")
                 val date = treatment.date ?: continue
                 if (date > latestDateInReceivedData) latestDateInReceivedData = date
 
-                when (treatment) {
-                    is NSBolus                  ->
-                        if (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT || doFullSync)
-                            storeDataForDb.addToBoluses(treatment.toBolus(fallbackICfg()))
-
-                    is NSCarbs                  ->
-                        if (preferences.get(BooleanKey.NsClientAcceptCarbs) || config.AAPSCLIENT || doFullSync)
-                            storeDataForDb.addToCarbs(treatment.toCarbs())
-
-                    is NSTemporaryTarget        ->
-                        if (preferences.get(BooleanKey.NsClientAcceptTempTarget) || config.AAPSCLIENT || doFullSync) {
-                            if (treatment.duration > 0L) {
-                                // not ending event
-                                if (treatment.targetBottomAsMgdl() !in Constants.TT_RANGE_MGDL
-                                    || treatment.targetTopAsMgdl() !in Constants.TT_RANGE_MGDL
-                                    || treatment.targetBottomAsMgdl() > treatment.targetTopAsMgdl()
-                                ) {
-                                    aapsLogger.debug(LTag.NSCLIENT, "Ignored TemporaryTarget $treatment")
-                                    continue
-                                }
-                            }
-                            storeDataForDb.addToTemporaryTargets(treatment.toTemporaryTarget())
-                        }
-
-                    is NSTemporaryBasal         ->
-                        if (preferences.get(BooleanKey.NsClientAcceptTbrEb) || config.AAPSCLIENT || doFullSync)
-                            storeDataForDb.addToTemporaryBasals(treatment.toTemporaryBasal())
-
-                    is NSEffectiveProfileSwitch ->
-                        if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
-                            treatment.toEffectiveProfileSwitch(dateUtil, fallbackICfg())?.let { effectiveProfileSwitch ->
-                                storeDataForDb.addToEffectiveProfileSwitches(effectiveProfileSwitch)
-                            }
-                        }
-
-                    is NSProfileSwitch          ->
-                        if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
-                            treatment.toProfileSwitch(profileRepository, dateUtil, fallbackICfg())?.let { profileSwitch ->
-                                storeDataForDb.addToProfileSwitches(profileSwitch)
-                            }
-                        }
-
-                    // A bolus wizard result belongs to its bolus, so it follows the insulin setting.
-                    is NSBolusWizard            ->
-                        if (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT || doFullSync)
-                            treatment.toBolusCalculatorResult()?.let { bolusCalculatorResult ->
-                                storeDataForDb.addToBolusCalculatorResults(bolusCalculatorResult)
-                            }
-
-                    is NSTherapyEvent           ->
-                        if (preferences.get(BooleanKey.NsClientAcceptTherapyEvent) || config.AAPSCLIENT || doFullSync)
-                            treatment.toTherapyEvent().let { therapyEvent ->
-                                storeDataForDb.addToTherapyEvents(therapyEvent)
-                                if (therapyEvent.type == TE.Type.ANNOUNCEMENT &&
-                                    preferences.get(BooleanKey.NsClientNotificationsFromAnnouncements) &&
-                                    therapyEvent.timestamp + T.mins(60).msecs() > dateUtil.now()
-                                )
-                                    notificationManager.post(
-                                        id = NotificationId.NS_ANNOUNCEMENT,
-                                        text = therapyEvent.note ?: "",
-                                        validTo = dateUtil.now() + T.mins(60).msecs(),
-                                        sound = AlarmSound.ALARM,
-                                        actions = listOf(NotificationAction(CoreUiStrings.snooze) { })
-                                    )
-                            }
-
-                    is NSOfflineEvent           ->
-                        if (preferences.get(BooleanKey.NsClientAcceptRunningMode) || config.AAPSCLIENT || doFullSync)
-                            treatment.toRunningMode().let { runningMode ->
-                                storeDataForDb.addToRunningModes(runningMode)
-                            }
-
-                    is NSExtendedBolus          ->
-                        if (preferences.get(BooleanKey.NsClientAcceptTbrEb) || config.AAPSCLIENT || doFullSync)
-                            treatment.toExtendedBolus().let { extendedBolus ->
-                                storeDataForDb.addToExtendedBoluses(extendedBolus)
-                            }
+                try {
+                    processTreatment(treatment, doFullSync)
+                } catch (error: Exception) {
+                    // One record must not cost the rest of the page: before, the first bad record ended the
+                    // loop, and with it the whole load (a Trio temp basal cancel stopped a full sync this way).
+                    aapsLogger.error(LTag.NSCLIENT, "Skipped NS treatment $treatment", error)
+                    failed++
+                    if (firstError == null) firstError = error.message ?: error.toString()
                 }
             }
+            if (failed > 0) nsClientRepository.addLog("◄ ERROR", "$failed TRs could not be stored: $firstError")
             if (advanceInitialLoadCursor && latestDateInReceivedData > 0)
                 nsClient.updateLatestTreatmentReceivedIfNewer(latestDateInReceivedData)
             return latestDateInReceivedData > 0
@@ -264,6 +198,88 @@ class NsIncomingDataProcessor(
             nsClientRepository.addLog("◄ ERROR", error.message)
         }
         return false
+    }
+
+    /** Hands one treatment to [storeDataForDb], if the settings accept its type. Throws for a record that cannot be stored. */
+    private fun processTreatment(treatment: NSTreatment, doFullSync: Boolean) {
+        when (treatment) {
+            is NSBolus                  ->
+                if (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT || doFullSync)
+                    storeDataForDb.addToBoluses(treatment.toBolus(fallbackICfg()))
+
+            is NSCarbs                  ->
+                if (preferences.get(BooleanKey.NsClientAcceptCarbs) || config.AAPSCLIENT || doFullSync)
+                    storeDataForDb.addToCarbs(treatment.toCarbs())
+
+            is NSTemporaryTarget        ->
+                if (preferences.get(BooleanKey.NsClientAcceptTempTarget) || config.AAPSCLIENT || doFullSync) {
+                    if (treatment.duration > 0L) {
+                        // not ending event
+                        if (treatment.targetBottomAsMgdl() !in Constants.TT_RANGE_MGDL
+                            || treatment.targetTopAsMgdl() !in Constants.TT_RANGE_MGDL
+                            || treatment.targetBottomAsMgdl() > treatment.targetTopAsMgdl()
+                        ) {
+                            aapsLogger.debug(LTag.NSCLIENT, "Ignored TemporaryTarget $treatment")
+                            return
+                        }
+                    }
+                    storeDataForDb.addToTemporaryTargets(treatment.toTemporaryTarget())
+                }
+
+            is NSTemporaryBasal         ->
+                if (preferences.get(BooleanKey.NsClientAcceptTbrEb) || config.AAPSCLIENT || doFullSync)
+                    storeDataForDb.addToTemporaryBasals(treatment.toTemporaryBasal())
+
+            is NSEffectiveProfileSwitch ->
+                if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
+                    treatment.toEffectiveProfileSwitch(dateUtil, fallbackICfg())?.let { effectiveProfileSwitch ->
+                        storeDataForDb.addToEffectiveProfileSwitches(effectiveProfileSwitch)
+                    }
+                }
+
+            is NSProfileSwitch          ->
+                if (preferences.get(BooleanKey.NsClientAcceptProfileSwitch) || config.AAPSCLIENT || doFullSync) {
+                    treatment.toProfileSwitch(profileRepository, dateUtil, fallbackICfg())?.let { profileSwitch ->
+                        storeDataForDb.addToProfileSwitches(profileSwitch)
+                    }
+                }
+
+            // A bolus wizard result belongs to its bolus, so it follows the insulin setting.
+            is NSBolusWizard            ->
+                if (preferences.get(BooleanKey.NsClientAcceptInsulin) || config.AAPSCLIENT || doFullSync)
+                    treatment.toBolusCalculatorResult()?.let { bolusCalculatorResult ->
+                        storeDataForDb.addToBolusCalculatorResults(bolusCalculatorResult)
+                    }
+
+            is NSTherapyEvent           ->
+                if (preferences.get(BooleanKey.NsClientAcceptTherapyEvent) || config.AAPSCLIENT || doFullSync)
+                    treatment.toTherapyEvent().let { therapyEvent ->
+                        storeDataForDb.addToTherapyEvents(therapyEvent)
+                        if (therapyEvent.type == TE.Type.ANNOUNCEMENT &&
+                            preferences.get(BooleanKey.NsClientNotificationsFromAnnouncements) &&
+                            therapyEvent.timestamp + T.mins(60).msecs() > dateUtil.now()
+                        )
+                            notificationManager.post(
+                                id = NotificationId.NS_ANNOUNCEMENT,
+                                text = therapyEvent.note ?: "",
+                                validTo = dateUtil.now() + T.mins(60).msecs(),
+                                sound = AlarmSound.ALARM,
+                                actions = listOf(NotificationAction(CoreUiStrings.snooze) { })
+                            )
+                    }
+
+            is NSOfflineEvent           ->
+                if (preferences.get(BooleanKey.NsClientAcceptRunningMode) || config.AAPSCLIENT || doFullSync)
+                    treatment.toRunningMode().let { runningMode ->
+                        storeDataForDb.addToRunningModes(runningMode)
+                    }
+
+            is NSExtendedBolus          ->
+                if (preferences.get(BooleanKey.NsClientAcceptTbrEb) || config.AAPSCLIENT || doFullSync)
+                    treatment.toExtendedBolus().let { extendedBolus ->
+                        storeDataForDb.addToExtendedBoluses(extendedBolus)
+                    }
+        }
     }
 
     fun processFood(data: Any) {

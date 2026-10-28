@@ -264,6 +264,9 @@ class NSClientV3Plugin(
         super.onStart()
 
         lastLoadedSrvModified = Json.decodeFromString(preferences.get(NsclientStringKey.V3LastModified))
+        // A full sync cut short by a restart goes on as a full sync. The cursors it reset are on disk, so
+        // without this it would continue as a normal first load, and store every record with a user entry.
+        if (preferences.get(NsclientBooleanKey.FullSyncPending)) fullSyncRequested.store(true)
 
         setClient()
 
@@ -746,6 +749,7 @@ class NSClientV3Plugin(
         initialLoadFinished = false
         storeLastLoadedSrvModified()
         dataSyncSelectorV3.resetToNextFullSync()
+        preferences.put(NsclientBooleanKey.FullSyncPending, true)
         fullSyncRequested.store(true)
     }
 
@@ -1234,6 +1238,7 @@ class NSClientV3Plugin(
 
     fun endFullSync() {
         doingFullSync = false
+        preferences.put(NsclientBooleanKey.FullSyncPending, false)
     }
 
     internal fun executeUpload(origin: String) {

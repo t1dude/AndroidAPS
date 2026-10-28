@@ -1,3 +1,7 @@
+// Every Long in this file is read with TolerantLongSerializer: Nightscout sends some Longs back as
+// rounded doubles, and one such value must not make the whole record unreadable.
+@file:UseSerializers(TolerantLongSerializer::class)
+
 package app.aaps.core.nssdk.remotemodel
 
 import app.aaps.core.nssdk.localmodel.treatment.EventType
@@ -9,6 +13,7 @@ import kotlinx.datetime.atStartOfDayIn
 import kotlinx.datetime.toInstant
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 /*
 * Depending on the type, different other fields are present.

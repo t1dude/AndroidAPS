@@ -309,6 +309,7 @@ ns_calibration_entry_last_sync|NsclientLongKey|false
 ns_carbs_last_synced_id|NsclientLongKey|false
 ns_cellular|BooleanKey|true
 ns_charging|BooleanKey|true
+ns_client_full_sync_pending|NsclientBooleanKey|false
 ns_client_paused|NsclientBooleanKey|true
 ns_client_v3_last_modified|NsclientStringKey|false
 ns_create_announcements_from_carbs_req|BooleanKey|true

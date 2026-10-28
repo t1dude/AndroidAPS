@@ -2,6 +2,7 @@ package app.aaps.core.nssdk.mapper
 
 import app.aaps.core.nssdk.localmodel.treatment.NSBolus
 import app.aaps.core.nssdk.localmodel.treatment.NSCarbs
+import app.aaps.core.nssdk.localmodel.treatment.NSOfflineEvent
 import app.aaps.core.nssdk.nsSdkJson
 import app.aaps.core.nssdk.remotemodel.RemoteTreatment
 import com.google.common.truth.Truth.assertThat
@@ -138,6 +139,53 @@ class WireTypeCoercionTest {
         val treatment = parse("""{"eventType":"Carb Correction","carbs":4}""")
 
         assertThat(treatment.carbs).isEqualTo(4.0)
+    }
+
+    // ---------------------------------------------------------------- decimal into a Long field
+
+    /**
+     * Real record from a Nightscout instance. AAPS uploads an open-ended running mode with
+     * `originalDuration = Long.MAX_VALUE`; Nightscout keeps it as a JavaScript double and sends back
+     * `9223372036854776000`, which is just over the `Long` range. Strict kotlinx threw on it, and on
+     * the REST load that one record made the whole page of 500 treatments unreadable.
+     */
+    @Test
+    fun `a Long rounded by Nightscout past the Long range reads as Long MAX_VALUE`() {
+        val json = """
+            {"app":"AAPS","autoForced":true,"date":1785068614076,"duration":0,"durationInMilliseconds":0,
+             "eventType":"OpenAPS Offline","isReadOnly":false,"isValid":true,"mode":"CLOSED_LOOP_LGS",
+             "originalDuration":9223372036854776000,"reason":"OTHER",
+             "reasons":"BgQualityCheck: LGS mode due to doubled values in BG source","utcOffset":120,
+             "created_at":"2026-07-26T12:23:34.076Z","identifier":"d9f30837-4db5-5b58-802f-8ba23b95750b",
+             "srvModified":1785072437285,"srvCreated":1785072437285,"subject":"aaps"}
+        """.trimIndent()
+
+        assertThat(parse(json).originalDuration).isEqualTo(Long.MAX_VALUE)
+        val treatment = json.toNSTreatment()
+        assertThat(treatment).isInstanceOf(NSOfflineEvent::class.java)
+        assertThat((treatment as NSOfflineEvent).originalDuration).isEqualTo(Long.MAX_VALUE)
+    }
+
+    /** Gson accepted a whole number written as a decimal in a `Long` field. */
+    @Test
+    fun `a whole decimal is accepted by a Long field`() {
+        val treatment = parse("""{"eventType":"Temp Basal","duration":30.0}""")
+
+        assertThat(treatment.duration).isEqualTo(30L)
+    }
+
+    /** Gson threw on a fraction in a `Long` field, and so does this. Rounding it would change the data. */
+    @Test
+    fun `a fraction in a Long field still throws`() {
+        assertThrows<SerializationException> { parse("""{"eventType":"Temp Basal","duration":29.5}""") }
+    }
+
+    /** Reading is tolerant, writing is not changed: a Long still goes out as an exact integer. */
+    @Test
+    fun `a Long is still written as an exact integer`() {
+        val text = nsSdkJson.encodeToString(RemoteTreatment.serializer(), RemoteTreatment(originalDuration = Long.MAX_VALUE))
+
+        assertThat(text).contains("\"originalDuration\":9223372036854775807")
     }
 
     // ---------------------------------------------------------------- booleans

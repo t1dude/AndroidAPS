@@ -17,7 +17,7 @@ import app.aaps.core.interfaces.rx.events.EventWearToMobile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.wear.R
-import dev.zacsweers.metro.AppScope
+import app.aaps.wear.di.WearScope
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import java.util.Date
@@ -37,7 +37,7 @@ import kotlin.math.max
  * The buttons go to the phone, which stops or moves the timer, and the next status brings the result
  * back. Until then the watch acts on its own copy, so it reads right also with the phone away.
  */
-@SingleIn(AppScope::class)
+@SingleIn(WearScope::class)
 @Inject
 class EatReminderWatch(
     private val context: Context,

@@ -70,7 +70,7 @@ sealed class MedtrumOverviewEvent {
     data class StartPatchWorkflow(val startStep: PatchStep) : MedtrumOverviewEvent()
     data class ShowDialog(val title: String, val message: String) : MedtrumOverviewEvent()
     data object ConfirmUnpair : MedtrumOverviewEvent()
-    data object ConfirmMoveSessionOut : MedtrumOverviewEvent()
+    data object ConfirmSendSnapshot : MedtrumOverviewEvent()
     data object ConfirmMoveSessionToWatch : MedtrumOverviewEvent()
     data object ConfirmTakeSessionIn : MedtrumOverviewEvent()
 
@@ -174,8 +174,8 @@ class MedtrumOverviewViewModel(
         _events.tryEmit(MedtrumOverviewEvent.ConfirmUnpair)
     }
 
-    fun onMoveSessionOutClick() {
-        _events.tryEmit(MedtrumOverviewEvent.ConfirmMoveSessionOut)
+    fun onSendSnapshotClick() {
+        _events.tryEmit(MedtrumOverviewEvent.ConfirmSendSnapshot)
     }
 
     fun onMoveSessionToWatchClick() {
@@ -186,14 +186,14 @@ class MedtrumOverviewViewModel(
         _events.tryEmit(MedtrumOverviewEvent.ConfirmTakeSessionIn)
     }
 
-    /** Handover test: the patch session goes to a file, and this phone stops talking to the patch. */
-    fun performMoveSessionOut() {
-        scope.launch { show(rh.gs(R.string.handover_test_move_out), sessionTransfer.moveOut()) }
+    /** Handover test: the patch session goes to the watch, and this phone stops talking to the patch. */
+    fun performMoveSessionToWatch() {
+        scope.launch { show(rh.gs(R.string.handover_test_move_to_watch), sessionTransfer.moveToWatch()) }
     }
 
-    /** Handover test: as [performMoveSessionOut], and the session is also sent to the watch. */
-    fun performMoveSessionToWatch() {
-        scope.launch { show(rh.gs(R.string.handover_test_move_to_watch), sessionTransfer.moveOut(toWatch = true)) }
+    /** Handover test: the watch's engine starts without the patch, this phone keeps it. */
+    fun performSendSnapshot() {
+        scope.launch { show(rh.gs(R.string.handover_test_send_snapshot), sessionTransfer.sendSnapshotWithoutPatch()) }
     }
 
     /** Handover test: the newest patch session file is taken in, and this phone drives the patch. */
@@ -380,15 +380,8 @@ class MedtrumOverviewViewModel(
                     onClick = { onClickChangePatch() }
                 )
             )
-            // Handover test (phase 0): move the running patch session to another phone and back
+            // Handover test: move the running patch session to the watch and back
             if (isPaired && !sessionTransfer.isMovedAway) {
-                add(
-                    ScreenAction(
-                        label = rh.gs(R.string.handover_test_move_out),
-                        icon = Icons.Filled.Upload,
-                        onClick = { onMoveSessionOutClick() }
-                    )
-                )
                 add(
                     ScreenAction(
                         label = rh.gs(R.string.handover_test_move_to_watch),
@@ -402,6 +395,16 @@ class MedtrumOverviewViewModel(
                         label = rh.gs(R.string.handover_test_take_in),
                         icon = Icons.Filled.Download,
                         onClick = { onTakeSessionInClick() }
+                    )
+                )
+            }
+            // Handover test: the watch's engine without the patch. Not while the watch has the patch.
+            if (!sessionTransfer.isMovedAway) {
+                add(
+                    ScreenAction(
+                        label = rh.gs(R.string.handover_test_send_snapshot),
+                        icon = Icons.Filled.Upload,
+                        onClick = { onSendSnapshotClick() }
                     )
                 )
             }

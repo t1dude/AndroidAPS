@@ -43,8 +43,12 @@ import java.util.zip.ZipInputStream
  * The engine's graph is built only when it is needed: when the phone hands over a pump session, when the
  * watch still holds one after a restart, or when one of the engine's own screens or receivers starts. In
  * companion mode nothing of the engine runs (Tim's lesson from Watch-APS: an engine kept alive without a
- * pump drains the battery). What the companion asks before that ([hasSession]) is read from the engine's
- * settings file directly, without building anything.
+ * pump drains the battery). What the companion asks before that ([isActive]) is read from the engine's
+ * files directly, without building anything.
+ *
+ * A test run ([isTestRun]) is the one case where the engine runs without a pump session: the phone sent
+ * the snapshot alone and kept the patch. The engine runs on its virtual pump, in open loop, until it is
+ * stopped on the watch ([stopTestRun]). It is for test T2: battery, and a steady loop over a night.
  */
 object WatchEngine {
 
@@ -63,12 +67,12 @@ object WatchEngine {
         this.companion = companion
         // A snapshot came while the engine ran, and the app restarted for it: start from the snapshot
         val snapshot = importPendingSnapshot()
-        // No session and no snapshot: the engine does not run, and neither may its scheduled work
-        if (snapshot == null && !hasSession()) WorkManager.getInstance(this.context).cancelAllWork()
+        // No session, no test run and no snapshot: the engine does not run, and neither may its scheduled work
+        if (snapshot == null && !isActive()) WorkManager.getInstance(this.context).cancelAllWork()
         when {
             snapshot != null -> startFromSnapshot(snapshot)
-            // The watch held a pump session when the app stopped: carry on with it
-            hasSession()     -> start { it.medtrumWatchLink.start() }
+            // The watch held a pump session, or ran a test, when the app stopped: carry on with it
+            isActive()       -> start { it.medtrumWatchLink.start() }
         }
     }
 
@@ -95,6 +99,8 @@ object WatchEngine {
      * it (there is no session any more). A moment later, so the hand back message is sent first.
      */
     fun afterHandback() {
+        // A session that came during a test run goes back with it: the engine does not start again
+        stateFile().edit().putBoolean(TEST_RUN_KEY, false).commit()
         graph?.appScope?.launch {
             // The keep alive and the other engine work stop with the engine
             WorkManager.getInstance(context).cancelAllWork()
@@ -102,6 +108,24 @@ object WatchEngine {
             restartApp("the pump was handed back")
         }
     }
+
+    /**
+     * Stops a test run: the engine stops with the app process, which starts again at once without it. The
+     * phone was never without its patch, so there is nothing to hand back.
+     */
+    fun stopTestRun() {
+        stateFile().edit().putBoolean(TEST_RUN_KEY, false).commit()
+        WorkManager.getInstance(context).cancelAllWork()
+        restartApp("the engine test run was stopped")
+    }
+
+    /** True while the engine runs: it holds a pump session, or it runs a test. Reads files only. */
+    fun isActive(): Boolean = hasSession() || isTestRun()
+
+    /** True while the engine runs without a pump session, from a snapshot the phone sent alone. */
+    fun isTestRun(): Boolean = stateFile().getBoolean(TEST_RUN_KEY, false)
+
+    private fun stateFile() = context.getSharedPreferences(EngineConfig.STATE_FILE, Context.MODE_PRIVATE)
 
     /** True while the engine holds a pump session. Reads the settings file only. */
     fun hasSession(): Boolean {
@@ -168,16 +192,20 @@ object WatchEngine {
             }
             // Before the engine is built: its config reads this
             val engineeringMode = manifest[HandoverSnapshot.KEY_ENGINEERING_MODE].toBoolean()
-            context.getSharedPreferences(EngineConfig.STATE_FILE, Context.MODE_PRIVATE).edit()
-                .putBoolean(EngineConfig.ENGINEERING_MODE_KEY, engineeringMode).commit()
+            val pumpSession = entries[HandoverSnapshot.PUMP_SESSION]?.decodeToString().orEmpty()
+            // A snapshot without a pump session is a test run: the phone kept the patch
+            stateFile().edit()
+                .putBoolean(EngineConfig.ENGINEERING_MODE_KEY, engineeringMode)
+                .putBoolean(TEST_RUN_KEY, pumpSession.isEmpty())
+                .commit()
             val target = context.getDatabasePath(DATABASE_FILE)
             target.parentFile?.mkdirs()
             listOf("", "-wal", "-shm", "-journal").forEach { File(target.path + it).delete() }
             target.writeBytes(database)
-            Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}, engineering mode $engineeringMode")
+            Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}, engineering mode $engineeringMode, test run ${pumpSession.isEmpty()}")
             return Snapshot(
                 settings = HandoverSnapshot.decodeLines(entries[HandoverSnapshot.SETTINGS]?.decodeToString().orEmpty()),
-                pumpSession = entries[HandoverSnapshot.PUMP_SESSION]?.decodeToString().orEmpty()
+                pumpSession = pumpSession
             )
         } catch (e: Exception) {
             Log.e(TAG, "Handover snapshot could not be read", e)
@@ -197,6 +225,7 @@ object WatchEngine {
         start(settings = snapshot.settings, setRunningMode = { graph -> openLoop(graph) }) { graph ->
             graph.medtrumWatchLink.start()
             if (snapshot.pumpSession.isNotEmpty()) graph.medtrumWatchLink.receiveSession(snapshot.pumpSession)
+            else graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
         }
     }
 
@@ -234,7 +263,7 @@ object WatchEngine {
      * a session: its work is cancelled then, and a worker that still comes must not build the engine.
      */
     fun workerCreator(className: String): MetroWorkerCreator? {
-        if (graph == null && !hasSession()) return null
+        if (graph == null && !isActive()) return null
         return graph().workerCreators.entries.firstOrNull { it.key.java.name == className }?.value
     }
 
@@ -292,6 +321,7 @@ object WatchEngine {
     private const val DATABASE_FILE = "aaps_engine.db"
 
     private const val PENDING_SNAPSHOT = "handover/pending_snapshot.zip"
+    private const val TEST_RUN_KEY = "test_run"
     private const val RESTART_DELAY_MS = 2_000L
     private const val HANDBACK_RESTART_DELAY_MS = 5_000L
     private const val TAG = "AAPS-Engine"

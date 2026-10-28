@@ -51,7 +51,7 @@ class MedtrumComposeContent(
         var dialogTitle by remember { mutableStateOf("") }
         var dialogMessage by remember { mutableStateOf("") }
         var showUnpairConfirm by remember { mutableStateOf(false) }
-        var showMoveOutConfirm by remember { mutableStateOf(false) }
+        var showSendSnapshotConfirm by remember { mutableStateOf(false) }
         var showMoveToWatchConfirm by remember { mutableStateOf(false) }
         var showTakeInConfirm by remember { mutableStateOf(false) }
         var restoreOffer by remember { mutableStateOf<MedtrumOverviewEvent.OfferRestoreMode?>(null) }
@@ -105,7 +105,7 @@ class MedtrumComposeContent(
                     }
 
                     is MedtrumOverviewEvent.ConfirmUnpair      -> showUnpairConfirm = true
-                    is MedtrumOverviewEvent.ConfirmMoveSessionOut     -> showMoveOutConfirm = true
+                    is MedtrumOverviewEvent.ConfirmSendSnapshot       -> showSendSnapshotConfirm = true
                     is MedtrumOverviewEvent.ConfirmMoveSessionToWatch -> showMoveToWatchConfirm = true
                     is MedtrumOverviewEvent.ConfirmTakeSessionIn      -> showTakeInConfirm = true
                     is MedtrumOverviewEvent.OfferRestoreMode          -> restoreOffer = event
@@ -133,18 +133,6 @@ class MedtrumComposeContent(
             )
         }
 
-        if (showMoveOutConfirm) {
-            OkCancelDialog(
-                title = stringResource(MedtrumR.string.handover_test_move_out),
-                message = stringResource(MedtrumR.string.handover_test_move_out_confirm),
-                onConfirm = {
-                    showMoveOutConfirm = false
-                    overviewViewModel.performMoveSessionOut()
-                },
-                onDismiss = { showMoveOutConfirm = false }
-            )
-        }
-
         if (showMoveToWatchConfirm) {
             OkCancelDialog(
                 title = stringResource(MedtrumR.string.handover_test_move_to_watch),
@@ -154,6 +142,18 @@ class MedtrumComposeContent(
                     overviewViewModel.performMoveSessionToWatch()
                 },
                 onDismiss = { showMoveToWatchConfirm = false }
+            )
+        }
+
+        if (showSendSnapshotConfirm) {
+            OkCancelDialog(
+                title = stringResource(MedtrumR.string.handover_test_send_snapshot),
+                message = stringResource(MedtrumR.string.handover_test_send_snapshot_confirm),
+                onConfirm = {
+                    showSendSnapshotConfirm = false
+                    overviewViewModel.performSendSnapshot()
+                },
+                onDismiss = { showSendSnapshotConfirm = false }
             )
         }
 

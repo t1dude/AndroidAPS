@@ -121,7 +121,7 @@ internal class MedtrumOverviewViewModelTest {
         whenever(rh.gs(R.string.reset_alarms_label)).thenReturn("Reset alarms")
         whenever(rh.gs(R.string.change_patch_label)).thenReturn("Change patch")
         whenever(rh.gs(CoreUiR.string.pump_unpair)).thenReturn("Unpair")
-        whenever(rh.gs(R.string.handover_test_move_out)).thenReturn("Move patch session out (test)")
+        whenever(rh.gs(R.string.handover_test_send_snapshot)).thenReturn("Start engine on watch, keep patch (test)")
         whenever(rh.gs(R.string.handover_test_take_in)).thenReturn("Take patch session in (test)")
         whenever(rh.gs(R.string.handover_test_move_to_watch)).thenReturn("Move patch session to watch (test)")
         whenever(rh.gs(CoreUiStrings.pump_unpair)).thenReturn("Unpair")
@@ -148,10 +148,11 @@ internal class MedtrumOverviewViewModelTest {
         assertThat(state.primaryActions.first { it.label == "Refresh" }.enabled).isFalse()
         assertThat(state.managementActions.map { it.label }).contains("Change patch")
         assertThat(state.managementActions.map { it.label }).doesNotContain("Unpair")
-        // Handover test: a phone with no patch can take a session in, and has nothing to move out
+        // Handover test: a phone with no patch can take a session in, and has nothing to move to the watch.
+        // The engine on the watch can still start without a patch.
         assertThat(state.managementActions.map { it.label }).contains("Take patch session in (test)")
-        assertThat(state.managementActions.map { it.label }).doesNotContain("Move patch session out (test)")
         assertThat(state.managementActions.map { it.label }).doesNotContain("Move patch session to watch (test)")
+        assertThat(state.managementActions.map { it.label }).contains("Start engine on watch, keep patch (test)")
     }
 
     @Test
@@ -166,9 +167,9 @@ internal class MedtrumOverviewViewModelTest {
         // disconnected + pump-active -> refresh enabled
         assertThat(state.primaryActions.first { it.label == "Refresh" }.enabled).isTrue()
         assertThat(state.managementActions.map { it.label }).contains("Unpair")
-        // Handover test: a phone with a patch can move its session out, and must not take another in
-        assertThat(state.managementActions.map { it.label }).contains("Move patch session out (test)")
+        // Handover test: a phone with a patch can move its session to the watch, and must not take another in
         assertThat(state.managementActions.map { it.label }).contains("Move patch session to watch (test)")
+        assertThat(state.managementActions.map { it.label }).contains("Start engine on watch, keep patch (test)")
         assertThat(state.managementActions.map { it.label }).doesNotContain("Take patch session in (test)")
     }
 }

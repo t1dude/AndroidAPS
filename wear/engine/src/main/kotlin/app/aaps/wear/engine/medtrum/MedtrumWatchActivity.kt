@@ -31,6 +31,7 @@ import app.aaps.core.interfaces.di.injectMetroMembers
 import app.aaps.pump.medtrum.handover.HandoverTdd
 import app.aaps.pump.medtrum.handover.HandoverTemporaryBasal
 import app.aaps.wear.engine.R
+import app.aaps.wear.engine.WatchEngine
 import dev.zacsweers.metro.Inject
 import java.text.DateFormat
 import java.util.Date
@@ -38,7 +39,7 @@ import kotlin.math.roundToInt
 
 /**
  * Handover test on the watch: the Medtrum patch session the phone handed over. Reads the patch status,
- * now or every few minutes, and hands the session back.
+ * now or every few minutes, and hands the session back. In a test run without a patch, it stops the engine.
  */
 class MedtrumWatchActivity : ComponentActivity() {
 
@@ -60,7 +61,14 @@ class MedtrumWatchActivity : ComponentActivity() {
                         contentPadding = PaddingValues(horizontal = 16.dp, vertical = 32.dp)
                     ) {
                         item { ListHeader { Text(stringResource(R.string.medtrum_watch_title), textAlign = TextAlign.Center) } }
-                        if (!status.hasSession) {
+                        if (!status.hasSession && WatchEngine.isTestRun()) {
+                            item { Centered(stringResource(R.string.engine_test_run)) }
+                            item {
+                                Button(onClick = { WatchEngine.stopTestRun() }, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.engine_stop_test_run))
+                                }
+                            }
+                        } else if (!status.hasSession) {
                             item { Centered(stringResource(R.string.medtrum_watch_no_session)) }
                         } else {
                             item { Centered(stringResource(R.string.medtrum_watch_patch, status.serial.toString(16))) }

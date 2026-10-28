@@ -118,6 +118,12 @@ So the transfer must be:
   recalculates its daily doses from the day the session left.
 - **T2: the engine on the Ultra 2** with a virtual pump: battery over a day, the Samsung freezer
   (battery exemption, see the G7 work), a steady 5-minute cycle overnight.
+  Run it with "Start engine on watch, keep patch (test)" on the phone's Medtrum page: the snapshot goes to
+  the watch without the patch session, so the phone keeps the patch and its loop all night. The watch
+  marks this as a test run, starts the engine again after a restart, and stops it with "Stop engine" on
+  its Medtrum test screen. (Moving the patch session for T2 would leave the patch with no loop at all.)
+  The phone to phone move ("Move patch session out") was removed on 2026-10-28: T1 for Medtrum is done,
+  and the watch is the only target now.
 
 ### Phase 1 - the watch app with two roles
 

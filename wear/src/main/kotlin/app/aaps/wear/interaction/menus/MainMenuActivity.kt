@@ -76,8 +76,9 @@ class MainMenuActivity : MenuListActivity() {
                 if (sp.getBoolean(R.string.key_prime_fill, false))
                     add(MenuItem(R.drawable.ic_canula, getString(R.string.menu_prime_fill)))
             }
-            // Handover test: only while the phone has handed a Medtrum patch session to the watch
-            if (WatchEngineHook.hasSession())
+            // Handover test: only while the phone has handed a Medtrum patch session to the watch, or the
+            // engine runs a test without one
+            if (WatchEngineHook.isEngineActive())
                 add(MenuItem(R.drawable.ic_status, WatchEngineHook.menuLabel(this@MainMenuActivity)))
             // Bottom of the menu: only present on Wear OS 6+ (where CWF and the other code-based
             // faces cannot run) and only while the pushed face is not installed. Since each app

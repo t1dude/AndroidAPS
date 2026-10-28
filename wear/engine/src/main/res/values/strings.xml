@@ -15,6 +15,8 @@
     <string name="medtrum_watch_auto_off">Stop reading every 5 min</string>
     <string name="medtrum_watch_auto_running">Reading the Medtrum patch every 5 minutes</string>
     <string name="medtrum_watch_hand_back">Hand back to phone</string>
+    <string name="engine_test_run">The engine runs without a patch (test): open loop with the virtual pump. The phone keeps the patch.</string>
+    <string name="engine_stop_test_run">Stop engine</string>
     <string name="medtrum_watch_service_channel">Medtrum test</string>
     <string name="medtrum_watch_send_log">Send log to phone</string>
     <string name="medtrum_watch_tbr_absolute" comment="%1$.2f=basal rate in units per hour, %2$s=time it ends, for example 18:00">Temp basal %1$.2f U/h until %2$s</string>

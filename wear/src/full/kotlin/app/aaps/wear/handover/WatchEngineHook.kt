@@ -56,8 +56,8 @@ object WatchEngineHook {
     /** New readings from the watch's own G7, for the engine while it runs. */
     fun onGlucose(readings: List<GV>) = WatchEngine.onGlucose(readings)
 
-    /** True while the engine holds a pump session: the menu then offers the engine's screen. */
-    fun hasSession(): Boolean = WatchEngine.hasSession()
+    /** True while the engine holds a pump session or runs a test: the menu then offers the engine's screen. */
+    fun isEngineActive(): Boolean = WatchEngine.isActive()
 
     fun menuLabel(context: Context): String = context.getString(R.string.medtrum_watch_title)
 

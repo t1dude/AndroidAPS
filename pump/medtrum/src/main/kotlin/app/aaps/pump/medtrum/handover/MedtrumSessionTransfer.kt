@@ -53,12 +53,15 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /**
- * Handover test (phase 0): moves a running patch session to another phone and back, through a file
- * in the AAPS exports folder, or to the watch and back, over the phone-watch link. Only one device may talk to the patch, so the phone that moved its
- * session away does not connect to the patch again until it takes a session back in.
+ * Handover test: moves a running patch session to the watch and back, over the phone-watch link. Only one
+ * device may talk to the patch, so the phone that moved its session away does not connect to the patch
+ * again until it takes a session back in.
  *
- * The file holds the patch serial and session token: anyone with it can talk to the patch. Delete it
- * after the test.
+ * A copy of the session is written to a file in the AAPS exports folder, as the way back when the watch
+ * never gets it, and the watch's hand back is saved there too. The file holds the patch serial and
+ * session token: anyone with it can talk to the patch. Delete it after the test.
+ *
+ * [sendSnapshotWithoutPatch] starts the watch's engine without the patch, for a test of the engine alone.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -87,7 +90,7 @@ class MedtrumSessionTransfer(
     private val scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
     private var started = false
 
-    /** What [moveOut] and [takeIn] report. [modeToRestore] is set when the loop can be turned back on. */
+    /** What [moveToWatch], [sendSnapshotWithoutPatch] and [takeIn] report. [modeToRestore] is set when the loop can be turned back on. */
     data class Result(val message: String, val modeToRestore: RM.Mode? = null)
 
     private val _movedAway = MutableStateFlow(preferences.get(MedtrumBooleanNonKey.SessionMovedAway))
@@ -111,12 +114,12 @@ class MedtrumSessionTransfer(
     }
 
     /**
-     * Writes the session to a file and stops this phone talking to the patch. A running loop is turned
+     * Sends the session to the watch and stops this phone talking to the patch. A running loop is turned
      * off (Disable loop), and the mode it had is kept, to offer it again when a session is taken back in.
-     * With [toWatch] the session is also sent to the watch. The file stays as a way back: if the watch
-     * never gets it, this phone can take it in again.
+     * The session is also written to a file, as a way back: if the watch never gets it, this phone can take
+     * it in again.
      */
-    suspend fun moveOut(toWatch: Boolean = false): Result = withContext(Dispatchers.IO) {
+    suspend fun moveToWatch(): Result = withContext(Dispatchers.IO) {
         if (medtrumPump.pumpSN == 0L) return@withContext Result(rh.gs(R.string.handover_test_no_patch))
         if (isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_already_moved))
         if (commandQueue.size() > 0 || commandQueue.performing() != null) return@withContext Result(rh.gs(R.string.handover_test_busy))
@@ -142,9 +145,22 @@ class MedtrumSessionTransfer(
             return@withContext Result(rh.gs(R.string.handover_test_write_failed), modeToRestore = rememberedMode())
         }
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to exports/$name")
-        val snapshotNote = if (toWatch) sendToWatch(session) else null
-        val moved = if (toWatch) rh.gs(R.string.handover_test_moved_to_watch, "exports/$name") else rh.gs(R.string.handover_test_moved_out, "exports/$name")
+        val snapshotNote = sendToWatch(session)
+        val moved = rh.gs(R.string.handover_test_moved_to_watch, "exports/$name")
         Result(listOfNotNull(moved, describeSent(extras), snapshotNote, loopNote).joinToString("\n\n"))
+    }
+
+    /**
+     * Sends the handover snapshot to the watch without the patch session. The watch's engine starts on this
+     * phone's settings and history, with its own virtual pump, in open loop. This phone keeps the patch and
+     * its loop, so the engine can run for a night (test T2: battery, a steady loop) at no risk.
+     */
+    suspend fun sendSnapshotWithoutPatch(): Result = withContext(Dispatchers.IO) {
+        val file = File(context.cacheDir, SNAPSHOT_FILE)
+        if (!snapshotWriter.write(file.absolutePath, pumpSession = "")) return@withContext Result(rh.gs(R.string.handover_test_snapshot_failed))
+        rxBus.send(EventMobileToWearFile(file.absolutePath, HandoverSnapshot.CHANNEL_PATH))
+        aapsLogger.info(LTag.PUMP, "Handover test: snapshot without the patch session sent to the watch (${file.length() / 1024} KB)")
+        Result(rh.gs(R.string.handover_test_snapshot_sent))
     }
 
     /**

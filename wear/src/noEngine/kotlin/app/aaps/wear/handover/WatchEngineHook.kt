@@ -25,7 +25,7 @@ object WatchEngineHook {
         file.delete()
     }
 
-    fun hasSession(): Boolean = false
+    fun isEngineActive(): Boolean = false
 
     /** No engine, no workers of its own: WorkManager builds whatever comes itself. */
     fun workerFactory(): WorkerFactory? = null

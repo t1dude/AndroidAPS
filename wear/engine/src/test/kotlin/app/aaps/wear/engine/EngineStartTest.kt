@@ -66,6 +66,23 @@ class EngineStartTest {
     }
 
     /**
+     * Found on the watch: the engine set its running mode before init had completed. There is no profile
+     * until then, so open loop was never set and the loop stayed disabled. The mode is set after init.
+     */
+    @Test
+    fun theRunningModeIsSetAfterInit() = runBlocking {
+        val graph = graph()
+        var initializedWhenModeWasSet: Boolean? = null
+
+        graph.startEngine(settings = null) {
+            initializedWhenModeWasSet = graph.config.appInitialized
+            true
+        }
+
+        assertThat(initializedWhenModeWasSet).isTrue()
+    }
+
+    /**
      * Files the engine's plugins read from the assets. Found on the watch: without `definition.json` the
      * version checker threw inside the loop's constraints, and the algorithm never gave a result.
      */

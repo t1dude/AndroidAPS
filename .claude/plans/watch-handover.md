@@ -10,8 +10,9 @@ watch yet.**
   the watch" below), in open loop with the virtual pump. Short test only: 2 loop runs in 1.5 minutes.
   The earlier watch tests each found one cause of no loop result (missing workers, the permanent
   profile switch cut out of the snapshot, `definition.json` missing from the engine's assets).
-- Fixed after that test, not yet tested on the watch: the running mode at engine start, the widget
-  errors, the Medtrum session values (see below).
+- Fixed after that test, and seen working in the second watch test: no temp basal cancel at the start,
+  no widget errors, the patch's last connection. The second test found that the loop then stayed
+  disabled (the mode was set before init); fixed, not yet tested on the watch.
 - Next: a longer open loop test on the watch (the start of T2), then the session in the engine's own
   Medtrum plugin. Before closed loop: the 30-minute limit for temp basals on the watch.
 - Not started: T1 for Dash and Omnipod 5, T2, the Watch-APS pieces (`SingleControllerPlugin`, alarm
@@ -191,6 +192,17 @@ that needs many changes inside the phone app, which Tim avoided on purpose.
     back to the phone as 0.20000000298023224. Stored as text now, as the editor of `SPImpl` already did.
   - **The watch's reads did not set the patch's last connection**, so it went back with the phone's own
     last read. Set after every good read now, as the phone's service does.
+  - **Second watch test (2026-10-28, 23:18-23:46, 28 min)**: no temp basal cancel at the start, no widget
+    errors, `last_connection` back as the watch's last read, 7 of 7 patch reads good, battery 73 % to
+    72 %. But the loop stayed disabled: the engine set its mode before init had completed, and there is
+    no profile until then (`ProfileFunction.getProfile`), so open loop was never set. Fixed: the mode is
+    set after `config.initCompleted()`, before the running mode check. `EngineStartTest` checks the order.
+  - **Open: the keep alive is late on the watch.** It ran every 5 minutes, then not for 13 minutes
+    (23:33-23:46, "KeepAlive fail"), then twice at once. WorkManager is held back while the watch is idle
+    with the screen off (the Watch-APS lesson). The loop does not depend on it (G7 readings start the
+    loop), but the keep alive reads the pump status and raises the "pump unreachable" alarm. On the
+    watch it needs an alarm, as the Medtrum reads have. Part of the alarm-driven loop cycle (Watch-APS
+    pieces). Count how often it happens in T2.
   - Still open: the loop asked for a zero temp of 120 min. The watch may only set 30 minutes or less
     (Phase 2, "Watch lost or dead"); nothing enforces that yet. Needed before closed loop.
 

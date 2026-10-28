@@ -255,7 +255,7 @@ class EventDataTest {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }
-        EventData.MedtrumSessionToPhone("medtrum-session-1\t2000\nmedtrum_sn_input\tabc123\n", "12:00:00 Connected after 3 s\n").let {
+        EventData.MedtrumSessionToPhone("medtrum-session-1\t2000\nmedtrum_sn_input\tabc123\n").let {
             assertThat(EventData.deserializeByte(it.serializeByte())).isEqualTo(it)
             assertThat(EventData.deserialize(it.serialize())).isEqualTo(it)
         }

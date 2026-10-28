@@ -7,6 +7,7 @@ import app.aaps.core.data.model.GV
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
+import app.aaps.core.interfaces.rx.events.EventWearToMobileFile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.wear.BuildConfig
 import app.aaps.wear.engine.CompanionLink
@@ -14,10 +15,12 @@ import app.aaps.wear.engine.EngineBuildInfo
 import app.aaps.wear.engine.EngineWorkerFactory
 import app.aaps.wear.engine.R
 import app.aaps.wear.engine.WatchEngine
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 
 /**
@@ -39,6 +42,13 @@ object WatchEngineHook {
         )
         val companion = object : CompanionLink {
             override fun sendToPhone(data: EventData) = rxBus.send(EventWearToMobile(data))
+
+            override suspend fun sendFileToPhone(file: File, channelPath: String): Boolean {
+                val done = CompletableDeferred<Boolean>()
+                rxBus.send(EventWearToMobileFile(file.absolutePath, channelPath, done))
+                // The data layer service sends it; without that service running nothing completes it
+                return withTimeoutOrNull(FILE_SEND_WAIT_MS) { done.await() } ?: false
+            }
         }
         WatchEngine.install(context, memberInjector, buildInfo, companion)
         // Messages from the phone that are the engine's business
@@ -62,4 +72,7 @@ object WatchEngineHook {
     fun menuLabel(context: Context): String = context.getString(R.string.medtrum_watch_title)
 
     fun screenIntent(context: Context): Intent? = WatchEngine.screenIntent(context)
+
+    /** A little longer than the data layer service waits for the send itself. */
+    private const val FILE_SEND_WAIT_MS = 3 * 60 * 1000L
 }

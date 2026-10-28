@@ -64,7 +64,7 @@ class MedtrumWatchActivity : ComponentActivity() {
                         if (!status.hasSession && WatchEngine.isTestRun()) {
                             item { Centered(stringResource(R.string.engine_test_run)) }
                             item {
-                                Button(onClick = { WatchEngine.stopTestRun() }, modifier = Modifier.fillMaxWidth()) {
+                                Button(onClick = { link.stopTestRun() }, modifier = Modifier.fillMaxWidth()) {
                                     Text(stringResource(R.string.engine_stop_test_run))
                                 }
                             }

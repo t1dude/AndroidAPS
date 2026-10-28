@@ -123,6 +123,10 @@ So the transfer must be:
   the watch without the patch session, so the phone keeps the patch and its loop all night. The watch
   marks this as a test run, starts the engine again after a restart, and stops it with "Stop engine" on
   its Medtrum test screen. (Moving the patch session for T2 would leave the patch with no loop at all.)
+  The test log goes to the phone whole, as a file over a Wear channel (a message is limited to about
+  100 KB, which held only the last hour), at hand back, at "Stop engine" and on "Send log". On top is a
+  summary of the last test: loop runs with and without a result, the longest time without one, late keep
+  alives, engine restarts, patch reads, and the battery per hour.
   The phone to phone move ("Move patch session out") was removed on 2026-10-28: T1 for Medtrum is done,
   and the watch is the only target now.
 

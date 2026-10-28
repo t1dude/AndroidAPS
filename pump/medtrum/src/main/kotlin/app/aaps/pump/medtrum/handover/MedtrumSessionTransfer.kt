@@ -105,10 +105,7 @@ class MedtrumSessionTransfer(
         if (started) return
         started = true
         scope.launch {
-            rxBus.toFlow(EventData.MedtrumSessionToPhone::class).collect {
-                saveWatchLog(it.log)
-                receiveFromWatch(it.session)
-            }
+            rxBus.toFlow(EventData.MedtrumSessionToPhone::class).collect { receiveFromWatch(it.session) }
         }
         scope.launch { rxBus.toFlow(EventData.MedtrumWatchLog::class).collect { saveWatchLog(it.log) } }
     }

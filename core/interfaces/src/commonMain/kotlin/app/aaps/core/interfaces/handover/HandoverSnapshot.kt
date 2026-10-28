@@ -16,6 +16,9 @@ object HandoverSnapshot {
     /** The Wear channel path the snapshot is sent on. */
     const val CHANNEL_PATH = "/aaps_handover_snapshot"
 
+    /** The Wear channel path the watch's engine test log goes back to the phone on (too big for a message). */
+    const val TEST_LOG_CHANNEL_PATH = "/aaps_handover_test_log"
+
     const val MANIFEST = "manifest.txt"
     const val DATABASE = "database.db"
     const val SETTINGS = "settings.txt"

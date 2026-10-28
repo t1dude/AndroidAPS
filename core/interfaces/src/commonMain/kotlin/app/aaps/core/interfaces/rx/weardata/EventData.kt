@@ -707,12 +707,16 @@ sealed class EventData : Event() {
 
     /**
      * Wear→Mobile, handover test: the watch hands the Medtrum patch session back and stops talking to the
-     * patch. [log] is the watch's test log, for the phone's exports folder.
+     * patch. The test log follows as a file ([MedtrumWatchLog]).
      */
     @Serializable
-    data class MedtrumSessionToPhone(val session: String, val log: String = "") : EventData()
+    data class MedtrumSessionToPhone(val session: String) : EventData()
 
-    /** Wear→Mobile, handover test: the watch's Medtrum test log, sent on request, for the phone's exports folder. */
+    /**
+     * Handover test: the watch's engine test log, for the phone's exports folder. Too big for a message, so
+     * it comes as a file over a Wear channel (`HandoverSnapshot.TEST_LOG_CHANNEL_PATH`), and the phone's
+     * data layer service posts it with this event.
+     */
     @Serializable
     data class MedtrumWatchLog(val log: String) : EventData()
 

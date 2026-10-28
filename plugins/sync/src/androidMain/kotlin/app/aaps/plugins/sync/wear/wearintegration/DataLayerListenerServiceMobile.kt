@@ -6,6 +6,7 @@ import android.os.Handler
 import android.os.HandlerThread
 import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.di.injectMetroMembers
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.plugin.ActivePlugin
@@ -22,6 +23,7 @@ import app.aaps.plugins.sync.wear.WearPlugin
 import com.google.android.gms.tasks.Tasks
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.CapabilityInfo
+import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.DataMap
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Node
@@ -103,6 +105,32 @@ class DataLayerListenerServiceMobile : WearableListenerService() {
         handler.looper.quitSafely()
         scope.cancel()
     }
+
+    /**
+     * The watch's engine test log, too big for a message. It is received into the cache and handed on as
+     * [EventData.MedtrumWatchLog], as a log in a message was, only when the channel closed normally.
+     */
+    override fun onChannelOpened(channel: ChannelClient.Channel) {
+        super.onChannelOpened(channel)
+        if (channel.path != HandoverSnapshot.TEST_LOG_CHANNEL_PATH) return
+        val file = testLogFile()
+        file.parentFile?.mkdirs()
+        file.delete()
+        channelClient.receiveFile(channel, Uri.fromFile(file), false)
+    }
+
+    override fun onInputClosed(channel: ChannelClient.Channel, closeReason: Int, appSpecificErrorCode: Int) {
+        super.onInputClosed(channel, closeReason, appSpecificErrorCode)
+        if (channel.path != HandoverSnapshot.TEST_LOG_CHANNEL_PATH) return
+        val file = testLogFile()
+        if (closeReason == ChannelClient.ChannelCallback.CLOSE_REASON_NORMAL && file.exists()) {
+            aapsLogger.info(LTag.WEAR, "Watch test log: received ${file.length()} bytes")
+            rxBus.send(EventData.MedtrumWatchLog(file.readText()))
+        } else aapsLogger.error(LTag.WEAR, "Watch test log: transfer failed, reason $closeReason/$appSpecificErrorCode")
+        file.delete()
+    }
+
+    private fun testLogFile() = File(cacheDir, "handover/incoming_test_log.txt")
 
     @ExperimentalSerializationApi
     override fun onMessageReceived(messageEvent: MessageEvent) {

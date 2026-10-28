@@ -18,6 +18,7 @@ import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.interfaces.rx.collectResilient
 import app.aaps.core.interfaces.rx.events.EventWearDataToMobile
 import app.aaps.core.interfaces.rx.events.EventWearToMobile
+import app.aaps.core.interfaces.rx.events.EventWearToMobileFile
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.interfaces.sharedPreferences.SP
 import app.aaps.shared.impl.weardata.ZipWatchfaceFormat
@@ -42,6 +43,7 @@ import dev.zacsweers.metro.Inject
 import io.reactivex.rxjava3.disposables.CompositeDisposable
 import io.reactivex.rxjava3.kotlin.plusAssign
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
@@ -50,6 +52,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.ExperimentalSerializationApi
 import java.io.File
 
@@ -94,6 +97,10 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         rxBus.toFlow(EventWearDataToMobile::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
                 withContext(Dispatchers.IO) { sendMessage(rxDataPath, it.payload.serializeByte()) }
+            }
+        rxBus.toFlow(EventWearToMobileFile::class)
+            .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) {
+                withContext(Dispatchers.IO) { it.done.complete(sendFile(it.path, it.channelPath)) }
             }
         rxBus.toFlow(EventWearPreferenceChange::class)
             .collectResilient(scope, aapsLogger, LTag.WEAR, start = CoroutineStart.UNDISPATCHED) { event ->
@@ -309,6 +316,40 @@ class DataLayerListenerServiceWear : WearableListenerService() {
         } ?: aapsLogger.debug(LTag.WEAR, "sendMessage: Ignoring message. No node selected.")
     }
 
+    /**
+     * Sends a file to the phone over a Wear channel, for what is too big for a message (the engine's test
+     * log). True when the whole file went out: the channel's output closed normally after the send.
+     */
+    private suspend fun sendFile(path: String, channelPath: String): Boolean {
+        val nodeId = transcriptionNodeId ?: run {
+            aapsLogger.error(LTag.WEAR, "sendFile: no phone connected, $channelPath not sent")
+            return false
+        }
+        return try {
+            val channel = channelClient.openChannel(nodeId, channelPath).await()
+            val closed = CompletableDeferred<Int>()
+            val callback = object : ChannelClient.ChannelCallback() {
+                override fun onOutputClosed(closedChannel: ChannelClient.Channel, closeReason: Int, appSpecificErrorCode: Int) {
+                    if (closedChannel.path == channel.path && closedChannel.nodeId == channel.nodeId) closed.complete(closeReason)
+                }
+            }
+            channelClient.registerChannelCallback(channel, callback).await()
+            try {
+                channelClient.sendFile(channel, Uri.fromFile(File(path))).await()
+                val reason = withTimeoutOrNull(FILE_SEND_TIMEOUT_MS) { closed.await() }
+                aapsLogger.debug(LTag.WEAR, "sendFile: $channelPath ${File(path).length()} bytes, close reason $reason")
+                reason == ChannelClient.ChannelCallback.CLOSE_REASON_NORMAL
+            } finally {
+                channelClient.unregisterChannelCallback(channel, callback)
+            }
+        } catch (cancellationException: CancellationException) {
+            throw cancellationException
+        } catch (exception: Exception) {
+            aapsLogger.error(LTag.WEAR, "sendFile: $channelPath failed", exception)
+            false
+        }
+    }
+
     private fun sendMessage(path: String, data: ByteArray) {
         aapsLogger.debug(LTag.WEAR, "sendMessage: $path ${data.size}")
         transcriptionNodeId?.also { nodeId ->
@@ -325,6 +366,9 @@ class DataLayerListenerServiceWear : WearableListenerService() {
     companion object {
 
         const val PHONE_CAPABILITY = "androidaps_mobile"
+
+        /** A test log of a night is about 2 MB; over Bluetooth that takes well under this. */
+        private const val FILE_SEND_TIMEOUT_MS = 2 * 60 * 1000L
 
         // Accepted intents
         val INTENT_NEW_DATA = DataLayerListenerServiceWear::class.java.name + ".NewData"

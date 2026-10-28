@@ -43,6 +43,14 @@
                 <action android:name="com.google.android.gms.wearable.DATA_CHANGED" />
             </intent-filter>
             <intent-filter>
+                <!-- The watch's engine test log (HandoverSnapshot.TEST_LOG_CHANNEL_PATH), a file too big for a message -->
+                <action android:name="com.google.android.gms.wearable.CHANNEL_EVENT" />
+                <data
+                    android:host="*"
+                    android:pathPrefix="/aaps_handover_test_log"
+                    android:scheme="wear" />
+            </intent-filter>
+            <intent-filter>
                 <action android:name="com.google.android.gms.wearable.CAPABILITY_CHANGED" />
                 <data
                     android:host="*"

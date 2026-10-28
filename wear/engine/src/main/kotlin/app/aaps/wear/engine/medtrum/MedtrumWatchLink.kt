@@ -11,6 +11,7 @@ import android.os.PowerManager
 import androidx.core.app.NotificationCompat
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.di.MetroMemberInjector
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.rx.weardata.EventData
@@ -50,6 +51,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -72,7 +74,7 @@ import kotlin.math.roundToLong
  * screen off, so it can take far longer than 5 minutes.
  *
  * The test log is kept in a file, because the watch's own log is too short to hold a test, and goes to the
- * phone's exports folder at hand back or on request.
+ * phone's exports folder at hand back, at the end of a test run without a patch, or on request.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -193,10 +195,35 @@ class MedtrumWatchLink(
 
     /** Sends the test log to the phone's exports folder, without handing the session back. */
     fun sendLog() {
+        scope.launch { sendLogToPhone() }
+    }
+
+    /**
+     * Ends a test run without a patch: the log goes to the phone first, because the engine then stops with
+     * the app process (see `WatchEngine.stopTestRun`).
+     */
+    fun stopTestRun() {
         scope.launch {
-            log("Log sent to the phone")
-            companion.sendToPhone(EventData.MedtrumWatchLog(logForPhone()))
+            log("Engine test run stopped")
+            sendLogToPhone()
+            WatchEngine.stopTestRun()
         }
+    }
+
+    /**
+     * The whole test log with a summary on top, as a file over a Wear channel: a night of it is far too big for
+     * a message. Returns when it was sent, so the app is not restarted in the middle of it.
+     */
+    private suspend fun sendLogToPhone() {
+        val file = File(context.cacheDir, LOG_FOR_PHONE_FILE)
+        if (!EngineTestLog.writeForPhone(context, file)) {
+            log("The log could not be written for the phone")
+            return
+        }
+        val kilobytes = file.length() / 1024
+        val sent = companion.sendFileToPhone(file, HandoverSnapshot.TEST_LOG_CHANNEL_PATH)
+        file.delete()
+        log(if (sent) "Log sent to the phone ($kilobytes KB)" else "The log could not be sent to the phone ($kilobytes KB)")
     }
 
     /** Stops talking to the patch and sends the session back to the phone, with the test log. */
@@ -211,7 +238,8 @@ class MedtrumWatchLink(
                 val session = MedtrumSession.read(preferences, System.currentTimeMillis()).withExtras(_status.value.extras)
                 _status.update { it.copy(serial = 0L, result = null, lastReadOk = null) }
                 log("Session of patch ${session.serial.toString(16)} handed back to the phone")
-                companion.sendToPhone(EventData.MedtrumSessionToPhone(session.toText(), logForPhone()))
+                companion.sendToPhone(EventData.MedtrumSessionToPhone(session.toText()))
+                sendLogToPhone()
                 // The engine stops with the session
                 WatchEngine.afterHandback()
             }
@@ -461,7 +489,6 @@ class MedtrumWatchLink(
     private fun tailLines(): List<String> = EngineTestLog.lastLines(context, SCREEN_LINES)
 
     /** The newest part of the log: a message to the phone may not be much larger. */
-    private fun logForPhone(): String = EngineTestLog.newest(context, PHONE_LOG_CHARS)
 
     /** Two decimals in the log: "0.35", not "0.35000000000000003". */
     private fun num(value: Double): String = "%.2f".format(Locale.US, value)
@@ -493,7 +520,7 @@ class MedtrumWatchLink(
         private const val SCREEN_LINES = 40
 
         // A message to the phone is limited to about 100 KB
-        private const val PHONE_LOG_CHARS = 80_000
+        private const val LOG_FOR_PHONE_FILE = "handover/test_log_for_phone.txt"
         private const val STATE_FILE = "medtrum_watch_test"
         private const val KEY_AUTO_READ = "auto_read"
         private const val KEY_NEXT_AT = "next_read_at"

@@ -18,6 +18,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
+import java.io.File
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -46,6 +47,7 @@ class EngineStartTest {
         buildInfo = EngineBuildInfo(versionName = "4.0.0-test", buildVersion = "test", applicationId = "info.nightscout.androidaps", buildType = "debug", debug = true),
         companion = object : CompanionLink {
             override fun sendToPhone(data: EventData) = Unit
+            override suspend fun sendFileToPhone(file: File, channelPath: String) = true
         },
         coreObjects = CoreObjectsGraph
     )

@@ -125,6 +125,15 @@ class SPImplTest {
         assertThat(sut.getDouble(someResource, 1.0)).isEqualTo(1.0)
     }
 
+    /** Found in a watch handover test: a bolus of 0.2 U came back to the phone as 0.20000000298023224. */
+    @Test
+    fun doubleIsKeptExactly() {
+        sut.putDouble("test", 0.2)
+        assertThat(sut.getDouble("test", 0.0)).isEqualTo(0.2)
+        sut.putDouble(someResource, 0.1)
+        assertThat(sut.getDouble(someResource, 0.0)).isEqualTo(0.1)
+    }
+
     @Test
     fun getInt() {
         sut.putInt("test", 1)

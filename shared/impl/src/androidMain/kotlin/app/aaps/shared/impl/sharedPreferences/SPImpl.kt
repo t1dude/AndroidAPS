@@ -166,11 +166,13 @@ class SPImpl(
     override fun putBoolean(resourceID: Int, value: Boolean) =
         sharedPreferences.edit().putBoolean(context.getString(resourceID), value).apply()
 
+    // As text, as the editor writes it: a Float changes the value (0.2 is read back as 0.20000000298023224).
+    // getDouble still reads a Float that an older build wrote.
     override fun putDouble(key: String, value: Double) =
-        sharedPreferences.edit().putFloat(key, value.toFloat()).apply()
+        sharedPreferences.edit().putString(key, value.toString()).apply()
 
     override fun putDouble(resourceID: Int, value: Double) =
-        sharedPreferences.edit().putFloat(context.getString(resourceID), value.toFloat()).apply()
+        sharedPreferences.edit().putString(context.getString(resourceID), value.toString()).apply()
 
     override fun putLong(key: String, value: Long) =
         sharedPreferences.edit().putLong(key, value).apply()

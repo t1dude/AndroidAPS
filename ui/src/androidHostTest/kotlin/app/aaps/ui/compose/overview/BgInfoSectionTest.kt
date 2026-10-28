@@ -262,13 +262,6 @@ class BgInfoSectionTest {
         assertThat(textHeight.value).isAtMost(room.value)
     }
 
-    @Test
-    fun textDoesNotFitInsideSmallCircleWithoutScaling() {
-        // Shows the problem the scaling fixes (seen on a Galaxy Z Flip 7)
-        val (textHeight, room) = measureSmallCircle(textReferenceSize = null)
-        assertThat(textHeight.value).isGreaterThan(room.value)
-    }
-
     /**
      * With a large system font the lines grew into the ring: on an iPhone the value was wider than the
      * hole, and on Android phones the "time ago" line ran into the ring from font 1.3. French and

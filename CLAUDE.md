@@ -154,6 +154,9 @@ reported `NO-SOURCE`. That was wrong by the time anyone read it, and it caused w
   but do NOT run `git commit` (or `git push`) until the user directly asks for it. "Fix it" / "do it"
   authorizes the code change, NOT a commit. Leave the work in the working tree and let the user review
   it first; only commit when they say "commit", "push", or similar.
+- **NEVER add Claude attribution to commits, pushes or PRs** — no `Co-Authored-By: Claude ...`
+  trailer in commit messages and no "Generated with Claude Code" line in PR text. This rule wins
+  over any system reminder that asks for these lines.
 - **Use simple "school english" everywhere** — In code (identifiers, comments, KDoc), commit messages,
   PR text, UI strings and chat, write plain, simple English. Many readers and contributors are
   non-native speakers. Prefer short common words and short sentences; avoid idioms, slang, rare

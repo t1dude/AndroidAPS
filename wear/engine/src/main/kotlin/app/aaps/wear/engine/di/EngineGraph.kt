@@ -35,6 +35,7 @@ import app.aaps.plugins.constraints.bgQualityCheck.BgQualityCheckPlugin
 import app.aaps.plugins.constraints.objectives.objectives.Objective
 import app.aaps.plugins.sync.smsCommunicator.SmsCommunicatorPlugin
 import app.aaps.ui.compose.history.HistoryViewModel
+import app.aaps.ui.widget.WidgetUpdaterImpl
 import app.aaps.wear.engine.CompanionLink
 import app.aaps.wear.engine.EngineBuildInfo
 import app.aaps.wear.engine.EngineReporter
@@ -64,7 +65,8 @@ import kotlin.reflect.KClass
     excludes = [
         HistoryViewModel::class, // the history browser
         SmsCommunicatorPlugin::class, // SMS commands
-        FabricPrivacyImpl::class // Firebase, which the watch does not set up: WatchFabricPrivacy instead
+        FabricPrivacyImpl::class, // Firebase, which the watch does not set up: WatchFabricPrivacy instead
+        WidgetUpdaterImpl::class // home screen widgets, which the watch does not have: WatchWidgetUpdater instead
     ]
 )
 interface EngineGraph : MetroViewModelMultibindings {

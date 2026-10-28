@@ -189,27 +189,35 @@ object WatchEngine {
 
     /**
      * Starts the engine from a snapshot: the phone's settings go in before the plugins start, keeping the
-     * engine's own pump choice (the virtual pump while the engine is tested). Then the pump session, and the
-     * loop in open loop: it suggests, it does not dose.
+     * engine's own pump choice (the virtual pump while the engine is tested). The loop goes to open loop (it
+     * suggests, it does not dose) before the running mode check starts, see `startEngine`. Then the pump
+     * session.
      */
     private fun startFromSnapshot(snapshot: Snapshot) {
-        start(settings = snapshot.settings) { graph ->
+        start(settings = snapshot.settings, setRunningMode = { graph -> openLoop(graph) }) { graph ->
             graph.medtrumWatchLink.start()
             if (snapshot.pumpSession.isNotEmpty()) graph.medtrumWatchLink.receiveSession(snapshot.pumpSession)
-            graph.appScope.launch { runCatching { openLoop(graph) }.onFailure { graph.aapsLogger.error(LTag.CORE, "Engine: open loop failed", it) } }
         }
     }
 
-    private suspend fun openLoop(graph: EngineGraph) {
+    /** True when the loop is in open loop now. */
+    private suspend fun openLoop(graph: EngineGraph): Boolean = try {
         val profile = graph.profileFunction.getProfile()
         if (profile == null) {
             graph.aapsLogger.warn(LTag.CORE, "Engine: no profile in the snapshot, the loop stays as it was")
             graph.medtrumWatchLink.note("Engine: no profile in the snapshot, the loop stays as it was")
-            return
+            false
+        } else {
+            val done = graph.loop.handleRunningModeChange(RM.Mode.OPEN_LOOP, Action.OPEN_LOOP_MODE, Sources.Aaps, profile = profile)
+            graph.aapsLogger.info(LTag.CORE, "Engine: open loop ${if (done) "set" else "could not be set"}")
+            graph.medtrumWatchLink.note("Engine: profile ${graph.profileFunction.getProfileName()}, open loop ${if (done) "set" else "could not be set"}")
+            done
         }
-        val done = graph.loop.handleRunningModeChange(RM.Mode.OPEN_LOOP, Action.OPEN_LOOP_MODE, Sources.Aaps, profile = profile)
-        graph.aapsLogger.info(LTag.CORE, "Engine: open loop ${if (done) "set" else "could not be set"}")
-        graph.medtrumWatchLink.note("Engine: profile ${graph.profileFunction.getProfileName()}, open loop ${if (done) "set" else "could not be set"}")
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        graph.aapsLogger.error(LTag.CORE, "Engine: open loop failed", e)
+        false
     }
 
     /** Stops the app process and starts it again a moment later (the alarm brings it back). */
@@ -240,16 +248,20 @@ object WatchEngine {
 
     /**
      * Starts the engine once, as `MainApp` starts the phone: the plugin list, then the plugins the settings
-     * enable, then the running mode check. [then] runs after that, on the engine's scope.
+     * enable, [setRunningMode], then the running mode check. [then] runs after that, on the engine's scope.
      */
-    private fun start(settings: Map<String, String>? = null, then: (EngineGraph) -> Unit) {
+    private fun start(
+        settings: Map<String, String>? = null,
+        setRunningMode: suspend (EngineGraph) -> Boolean = { true },
+        then: (EngineGraph) -> Unit
+    ) {
         val graph = graph()
         graph.appScope.launch {
             // The engine must never take the watch app down: a failure is logged and the companion goes on
             try {
                 startMutex.withLock {
                     if (!started) {
-                        graph.startEngine(settings)
+                        graph.startEngine(settings) { setRunningMode(graph) }
                         started = true
                     }
                 }

@@ -291,6 +291,9 @@ class MedtrumWatchLink(
             }
             log("Step $name ok in ${System.currentTimeMillis() - stepStarted} ms")
         }
+        // As the phone's service does after a good read. It goes back with the session, so the phone does not
+        // take the patch as unreachable since its own last read.
+        medtrumPump.lastConnection = System.currentTimeMillis()
         followBasal()
         log(
             "Read ok in ${seconds(started)} s: ${medtrumPump.pumpState}, reservoir ${num(medtrumPump.reservoir)} U, battery ${num(medtrumPump.batteryVoltage_B)} V, " +

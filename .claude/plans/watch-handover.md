@@ -1,6 +1,21 @@
 # Handover: the watch runs the loop and drives the pump
 
-**Status: planned (2026-10-16). Nothing built yet beyond Dexcom G7 direct-to-watch.**
+**Status (2026-10-28): Phase 0 and Phase 1 in progress. Nothing here is confirmed as working on the
+watch yet.**
+
+- Built: Dexcom G7 direct-to-watch; T1 for Medtrum (see the T1 result below); the `:wear:engine`
+  module with its own graph, settings and database; the handover snapshot; the phone's workers in the
+  engine.
+- The engine's loop gave its first results on the watch (test of 2026-10-28, see "First loop results on
+  the watch" below), in open loop with the virtual pump. Short test only: 2 loop runs in 1.5 minutes.
+  The earlier watch tests each found one cause of no loop result (missing workers, the permanent
+  profile switch cut out of the snapshot, `definition.json` missing from the engine's assets).
+- Fixed after that test, not yet tested on the watch: the running mode at engine start, the widget
+  errors, the Medtrum session values (see below).
+- Next: a longer open loop test on the watch (the start of T2), then the session in the engine's own
+  Medtrum plugin. Before closed loop: the 30-minute limit for temp basals on the watch.
+- Not started: T1 for Dash and Omnipod 5, T2, the Watch-APS pieces (`SingleControllerPlugin`, alarm
+  loop cycle, keep alive, sensor watchdog), Phase 2 to 4.
 
 ## Goal
 
@@ -150,6 +165,28 @@ that needs many changes inside the phone app, which Tim avoided on purpose.
   loop. If the engine already runs, the app restarts once to take it in; it restarts at hand back too, so
   the engine stops. The engine writes its start and every loop run (with the battery level) to the test
   log that reaches the phone.
+
+- **First loop results on the watch (2026-10-28).** Medtrum session and snapshot to the watch at 22:20,
+  back at 22:21. The engine took in 597 settings, profile "Normal", 7 daily doses and the running zero
+  temp basal, and set open loop. The loop ran twice on the companion's G7 readings (186 and 177
+  falling) and suggested a zero temp. Dynamic ISF had all 7 days from the first run ("7 of 7 days
+  cached, 0 calculated", ISF 24 mg/dl), as "Total daily dose" asks. Two patch reads, 3-4 s each, history
+  418/418 unchanged there and back. Found in the log, and fixed after it:
+  - **The engine cancelled the temp basal at its start.** The phone disables its loop before the move
+    out, the snapshot brings that mode, and the running mode check (`RunningModeReconciler`) cancels the
+    running temp basal for "loop disabled". The engine set open loop only after that. With the virtual
+    pump it only ended the copied temp basal in the watch's database (the algorithm saw no temp while the
+    patch ran 0 U/h); with the engine's own Medtrum plugin it would be a real command to the patch at
+    every handover. Now `startEngine` sets the engine's mode before the check starts, and when it cannot
+    (no profile in the snapshot) the check does not start at all.
+  - **The phone's widget updater ran in the engine** and failed on every loop run (the watch has no
+    widget manager). Left out of `EngineGraph`; `WatchWidgetUpdater` stands in, as on desktop.
+  - **Doubles in the engine's settings were stored as Float** (`SPImpl.putDouble`), so a 0.2 U bolus came
+    back to the phone as 0.20000000298023224. Stored as text now, as the editor of `SPImpl` already did.
+  - **The watch's reads did not set the patch's last connection**, so it went back with the phone's own
+    last read. Set after every good read now, as the phone's service does.
+  - Still open: the loop asked for a zero temp of 120 min. The watch may only set 30 minutes or less
+    (Phase 2, "Watch lost or dead"); nothing enforces that yet. Needed before closed loop.
 
 - New module (working name `:watchapp`): the wear companion UI plus the AAPS engine. Installed instead
   of `:wear` on handover-capable watches only (Android 12+, minSdk 31). `:wear` stays as it is for

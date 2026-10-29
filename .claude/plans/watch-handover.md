@@ -86,7 +86,16 @@ Each step is a watch test before the next.
   Open: how far back the patch history goes. A handover longer than the patch keeps records would lose
   some.
 - **Step 3: one supervised command from the watch**: a 0 U/h temp basal for 30 minutes, then cancel. On
-  the patch, and in the phone's treatments after hand back.
+  the patch, and in the phone's treatments after hand back. Built 2026-10-29, not yet tested on the watch:
+  two buttons on the watch's Medtrum screen, through the engine's command queue. After each command the
+  test log says what the patch runs and what the watch's records hold; both must show it, or the watch
+  threw the patch's record away (the pump identity, see the second test). Only by hand: the loop stays in
+  open loop. The read button now waits for a read that runs already instead of failing.
+
+  **Second test with the patch (2026-10-29, 22:21 to 22:38).** The pump identity came along ("records
+  taken from Medtrum Nano fc41637c"), no record thrown away, the temp basal went back as it came. Not a
+  proof: the patch made no new record while the watch had it (history 63/63 all the time). Step 3's
+  commands make records, so they test it.
 - **Step 4: LGS on the watch.** Open loop goes then (decision 8).
 - **Step 5: closed loop**, with the 30-minute limit for temp basals as an engine constraint.
 

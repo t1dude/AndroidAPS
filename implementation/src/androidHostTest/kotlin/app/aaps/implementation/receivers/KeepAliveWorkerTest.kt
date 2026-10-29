@@ -52,6 +52,7 @@ import java.util.concurrent.TimeoutException
 class KeepAliveWorkerTest : TestBaseWithProfile() {
 
     private lateinit var worker: KeepAliveWorker
+    private lateinit var check: KeepAliveCheck
 
     @Mock private lateinit var loop: Loop
     @Mock private lateinit var maintenance: Maintenance
@@ -67,9 +68,9 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
 
     @BeforeEach
     fun setUp() {
-        // KeepAliveWorker keeps lastRun / lastReadStatus / lastIobUpload as companion (static) state
-        // that survives between test methods in the same JVM. Reset it before each test so the cases
-        // are deterministic and order-independent.
+        // KeepAliveWorker keeps lastRun as companion (static) state that survives between test methods in
+        // the same JVM. Reset it before each test so the cases are deterministic and order-independent.
+        // The check's own state is new with each check.
         resetWorkerStaticState()
         // Configure mocks provided by the base class or declared here.
         whenever(iobCobCalculator.ads).thenReturn(ads)
@@ -83,14 +84,12 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(preferences.get(LongNonKey.LastCleanupRun)).thenReturn(now)
     }
 
-    private fun createWorker(): KeepAliveWorker =
-        KeepAliveWorker(
-            context = context,
-            params = workerParameters,
+    private fun createWorker(): KeepAliveWorker {
+        // The real check, not a mock: the assertions below were written against the work this worker
+        // did inline, and they all still have to pass now that the watch's engine runs it too
+        check = KeepAliveCheck(
             aapsLogger = aapsLogger,
-            fabricPrivacy = fabricPrivacy,
             localAlertUtils = localAlertUtils,
-            persistenceLayer = persistenceLayer,
             config = config,
             iobCobCalculator = iobCobCalculator,
             loop = loop,
@@ -99,18 +98,26 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
             profileFunction = profileFunction,
             rxBus = mockedRxBus,
             commandQueue = commandQueue,
-            // The real shared component, not a mock: the assertions below were written against the
-            // work this worker used to do inline, and they all still have to pass now it is shared.
+            // The real shared component, not a mock, for the same reason
             periodicMaintenance = PeriodicMaintenance(aapsLogger, localAlertUtils, persistenceLayer, maintenance, preferences, dateUtil),
             rh = rh,
-            preferences = preferences,
             dstHelper = dstHelper,
-            workManager = workManager,
             ch = ch
         )
+        return KeepAliveWorker(
+            context = context,
+            params = workerParameters,
+            aapsLogger = aapsLogger,
+            fabricPrivacy = fabricPrivacy,
+            config = config,
+            dateUtil = dateUtil,
+            keepAliveCheck = check,
+            workManager = workManager
+        )
+    }
 
     private fun resetWorkerStaticState() {
-        listOf("lastRun", "lastReadStatus", "lastIobUpload").forEach { name ->
+        listOf("lastRun").forEach { name ->
             val field = try {
                 KeepAliveWorker::class.java.getDeclaredField(name)
             } catch (_: NoSuchFieldException) {
@@ -196,7 +203,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         testPumpPlugin.lastData = now - T.mins(20).msecs()
 
         // Act
-        worker.checkPump()
+        check.checkPump()
 
         // Assert
         verify(commandQueue).readStatus(anyOrNull())
@@ -214,7 +221,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         testPumpPlugin.lastData = now // fresh -> status not outdated; requested basal 1.0 vs pump 0.0 -> basal outdated
 
         // Act
-        worker.checkPump()
+        check.checkPump()
 
         // Assert
         verify(commandQueue).readStatus("basal outdated")
@@ -229,7 +236,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         testPumpPlugin.isProfileSet = false
 
         // Act
-        worker.checkPump()
+        check.checkPump()
 
         // Assert
         verify(mockedRxBus).send(any<EventProfileChangeRequested>())
@@ -252,7 +259,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         worker = createWorker()
         requestedPsRunningFrom(140)
 
-        worker.checkPump()
+        check.checkPump()
 
         verify(mockedRxBus, never()).send(any<EventProfileChangeRequested>())
     }
@@ -262,7 +269,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         worker = createWorker()
         requestedPsRunningFrom(139)
 
-        worker.checkPump()
+        check.checkPump()
 
         verify(mockedRxBus).send(any<EventProfileChangeRequested>())
     }
@@ -283,7 +290,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         testPumpPlugin.isProfileSet = true
         testPumpPlugin.lastData = now
 
-        worker.checkPump()
+        check.checkPump()
 
         verify(commandQueue, never()).readStatus(any())
         verify(mockedRxBus, never()).send(any<EventProfileChangeRequested>())
@@ -301,7 +308,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         testPumpPlugin.isProfileSet = true
         testPumpPlugin.lastData = now
 
-        worker.checkPump()
+        check.checkPump()
 
         verify(commandQueue).readStatus("basal outdated")
     }
@@ -328,7 +335,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(profileFunction.getRequestedProfile()).thenReturn(null)
 
         // Act
-        worker.checkPump()
+        check.checkPump()
 
         // Assert
         verify(commandQueue, never()).readStatus(any())
@@ -351,7 +358,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(commandQueue.isRunning(Command.CommandType.BASAL_PROFILE)).thenReturn(true)
 
         // Act
-        worker.checkPump()
+        check.checkPump()
 
         // Assert
         verify(commandQueue, never()).readStatus(any())
@@ -380,7 +387,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(config.AAPSCLIENT).thenReturn(true)
 
         // Act
-        worker.checkAPS()
+        check.checkAPS()
 
         // Assert
         verify(loop, never()).scheduleBuildAndStoreDeviceStatus(any())
@@ -393,7 +400,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(config.PUMPCONTROL).thenReturn(true)
 
         // Act
-        worker.checkAPS()
+        check.checkAPS()
 
         // Assert
         verify(loop).scheduleBuildAndStoreDeviceStatus("KeepAliveWorker")
@@ -408,7 +415,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(activePlugin.activeAPS).thenReturn(null)
 
         // Act
-        worker.checkAPS()
+        check.checkAPS()
 
         // Assert
         verify(loop, never()).scheduleBuildAndStoreDeviceStatus(any())
@@ -425,7 +432,7 @@ class KeepAliveWorkerTest : TestBaseWithProfile() {
         whenever(activePlugin.activeAPS).thenReturn(aps)
 
         // Act
-        worker.checkAPS()
+        check.checkAPS()
 
         // Assert
         verify(loop).scheduleBuildAndStoreDeviceStatus("KeepAliveWorker")

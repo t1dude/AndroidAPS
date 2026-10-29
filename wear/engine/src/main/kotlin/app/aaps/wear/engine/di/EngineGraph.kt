@@ -16,6 +16,7 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.plugin.ActivePlugin
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.profile.ProfileFunction
+import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.core.interfaces.rx.bus.RxBus
 import app.aaps.core.keys.interfaces.Preferences
 import app.aaps.core.objects.di.CoreObjectsGraph
@@ -105,6 +106,7 @@ interface EngineGraph : MetroViewModelMultibindings {
     val profileFunction: ProfileFunction
     val loop: Loop
     val activePlugin: ActivePlugin
+    val pumpSync: PumpSync
     val engineReporter: EngineReporter
     val engineKeepAlive: EngineKeepAlive
     val context: Context

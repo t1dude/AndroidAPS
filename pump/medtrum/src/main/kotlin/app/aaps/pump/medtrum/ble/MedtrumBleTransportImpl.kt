@@ -37,6 +37,7 @@ import app.aaps.pump.medtrum.comm.ReadDataPacket
 import app.aaps.pump.medtrum.comm.WriteCommandPackets
 import app.aaps.pump.medtrum.extension.toInt
 import app.aaps.pump.medtrum.keys.MedtrumBooleanKey
+import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
@@ -137,6 +138,7 @@ class MedtrumBleTransportImpl(
 
     @Synchronized
     override fun connect(from: String, deviceSN: Long): Boolean {
+        if (isSessionMovedAway(from)) return false
         if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT) || !hasPermission(Manifest.permission.BLUETOOTH_SCAN)) {
             rxBus.send(EventShowSnackbar(context.getString(app.aaps.core.ui.R.string.need_connect_permission), EventShowSnackbar.Type.Error))
             aapsLogger.error(LTag.PUMPBTCOMM, "missing permission: $from")
@@ -284,6 +286,17 @@ class MedtrumBleTransportImpl(
                 readPacket = null
             }
         }
+    }
+
+    /**
+     * True while another device (the watch) has this patch's session. Then this device never connects: only
+     * one device may talk to the patch, and two that both send commands could give insulin twice. Checked
+     * here, at the lowest layer, so no path around the driver (queue, service, screens) can connect either.
+     */
+    private fun isSessionMovedAway(from: String): Boolean {
+        if (!preferences.get(MedtrumBooleanNonKey.SessionMovedAway)) return false
+        aapsLogger.warn(LTag.PUMPBTCOMM, "connect refused, the patch session was moved to another device: $from")
+        return true
     }
 
     // connectGatt(Context, ...) is deprecated from API 37 in favour of an overload taking
@@ -546,6 +559,7 @@ class MedtrumBleTransportImpl(
     private inner class MedtrumGattImpl : BleGatt {
 
         override fun connect(address: String): Boolean {
+            if (isSessionMovedAway("gatt")) return false
             if (!hasPermission(Manifest.permission.BLUETOOTH_CONNECT)) return false
             val device = bluetoothAdapter?.getRemoteDevice(address) ?: return false
             connectGatt(device)

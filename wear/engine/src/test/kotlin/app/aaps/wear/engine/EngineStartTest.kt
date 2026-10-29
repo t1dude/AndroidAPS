@@ -1,5 +1,6 @@
 package app.aaps.wear.engine
 
+import android.app.AlarmManager
 import android.content.Context
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
@@ -8,6 +9,11 @@ import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.objects.di.CoreObjectsGraph
 import app.aaps.database.di.DatabaseConfig
+import app.aaps.pump.medtrum.MedtrumPlugin
+import app.aaps.pump.medtrum.comm.enums.MedtrumPumpState
+import app.aaps.pump.medtrum.handover.MedtrumSession
+import app.aaps.pump.medtrum.keys.MedtrumIntNonKey
+import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import app.aaps.pump.virtual.VirtualPumpPlugin
 import app.aaps.wear.engine.di.EngineGraph
 import app.aaps.wear.engine.source.WatchG7SourcePlugin
@@ -18,12 +24,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Before
-import java.io.File
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.RuntimeEnvironment
+import org.robolectric.Shadows.shadowOf
 import org.robolectric.annotation.Config
+import java.io.File
 
 /**
  * The engine's start on a real graph, as the watch runs it. Found the hard way: AAPS needs a default plugin
@@ -35,7 +42,7 @@ class EngineStartTest {
 
     @Before
     fun setUp() {
-        // The engine's start schedules its keep alive, as the watch app's WorkManager does on the watch
+        // The engine's start schedules the phone's other workers (running mode expiry), as on the watch
         WorkManagerTestInitHelper.initializeTestWorkManager(RuntimeEnvironment.getApplication())
     }
 
@@ -63,8 +70,26 @@ class EngineStartTest {
         assertThat(graph.pluginStore.plugins.map { it::class }).containsNoneIn(EnginePlugins.leftOut)
         assertThat(graph.config.appInitialized).isTrue()
         // Found on the watch: without the keep alive the virtual pump never got the profile, and the loop
-        // stopped at "no basal on the pump" on every reading
-        assertThat(WorkManager.getInstance(RuntimeEnvironment.getApplication()).getWorkInfosForUniqueWork("KeepAlive").get()).isNotEmpty()
+        // stopped at "no basal on the pump" on every reading. It runs from the CGM and an alarm, not from
+        // WorkManager, which was 13 to 29 minutes late on the watch.
+        val alarmManager = RuntimeEnvironment.getApplication().getSystemService(AlarmManager::class.java)
+        assertThat(shadowOf(alarmManager).scheduledAlarms).isNotEmpty()
+        assertThat(WorkManager.getInstance(RuntimeEnvironment.getApplication()).getWorkInfosForUniqueWork("KeepAlive").get()).isEmpty()
+    }
+
+    /** With a patch session the engine's pump is the Medtrum driver, the phone's own, whatever was set before. */
+    @Test
+    fun withAPatchSessionThePumpIsTheMedtrumDriver() = runBlocking {
+        val graph = graph()
+        val session = MedtrumSession(
+            exportedAt = 1_793_222_415_279L,
+            values = mapOf(MedtrumStringNonKey.SnInput.key to "FC41637C", MedtrumIntNonKey.PumpState.key to MedtrumPumpState.ACTIVE.state.toInt().toString())
+        )
+
+        graph.startEngine(settings = null, pumpSession = session.toText())
+
+        assertThat(graph.medtrumWatchLink.holdsSession).isTrue()
+        assertThat(graph.activePlugin.activePump.selectedActivePump()).isInstanceOf(MedtrumPlugin::class.java)
     }
 
     /**

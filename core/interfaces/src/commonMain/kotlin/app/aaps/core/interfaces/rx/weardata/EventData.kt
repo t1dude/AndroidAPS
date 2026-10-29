@@ -713,7 +713,7 @@ sealed class EventData : Event() {
     data class MedtrumSessionToPhone(val session: String) : EventData()
 
     /**
-     * Handover test: the watch's engine test log, for the phone's exports folder. Too big for a message, so
+     * Handover test: the watch's engine test log, for the phone's handover folder. Too big for a message, so
      * it comes as a file over a Wear channel (`HandoverSnapshot.TEST_LOG_CHANNEL_PATH`), and the phone's
      * data layer service posts it with this event.
      */

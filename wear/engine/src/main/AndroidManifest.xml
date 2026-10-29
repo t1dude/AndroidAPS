@@ -1,22 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
+    <!-- The keep alive's alarm holds the watch awake for one run (EngineKeepAlive) -->
     <uses-permission android:name="android.permission.WAKE_LOCK" />
 
     <application>
-        <!-- Handover test: reads a Medtrum patch whose session the phone handed over -->
-        <service
-            android:name=".medtrum.MedtrumWatchService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+        <!-- Handover: the Medtrum patch session the phone handed over -->
         <activity
             android:name=".medtrum.MedtrumWatchActivity"
             android:exported="false"
             android:taskAffinity="" />
+        <!-- The engine's keep alive when no CGM reading comes (EngineKeepAlive) -->
         <receiver
-            android:name=".medtrum.MedtrumWatchAlarmReceiver"
+            android:name=".EngineKeepAliveReceiver"
             android:exported="false" />
         <receiver
             android:name=".receivers.CarbSuggestionReceiver"

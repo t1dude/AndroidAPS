@@ -24,7 +24,6 @@ import app.aaps.core.objects.workflow.WorkerKey
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.implementation.maintenance.PreferenceImportApplier
 import app.aaps.implementation.plugin.PluginStore
-import app.aaps.implementation.receivers.KeepAliveWorker
 import app.aaps.implementation.resources.ResourceHelperImpl
 import app.aaps.implementation.scenes.SceneExpiryWorker
 import app.aaps.implementation.utils.fabric.FabricPrivacyImpl
@@ -38,6 +37,7 @@ import app.aaps.ui.compose.history.HistoryViewModel
 import app.aaps.ui.widget.WidgetUpdaterImpl
 import app.aaps.wear.engine.CompanionLink
 import app.aaps.wear.engine.EngineBuildInfo
+import app.aaps.wear.engine.EngineKeepAlive
 import app.aaps.wear.engine.EngineReporter
 import app.aaps.wear.engine.medtrum.MedtrumWatchLink
 import app.aaps.wear.engine.source.WatchG7SourcePlugin
@@ -106,20 +106,15 @@ interface EngineGraph : MetroViewModelMultibindings {
     val loop: Loop
     val activePlugin: ActivePlugin
     val engineReporter: EngineReporter
+    val engineKeepAlive: EngineKeepAlive
     val context: Context
 
     /**
-     * The phone's workers the engine runs, as `AppWorkersGraph` lists them on the phone. The keep alive is
-     * the one that matters most: it gives the pump the running profile (without it the loop finds no basal
-     * on the pump and stops), reads the pump status and raises the pump unreachable alarm.
+     * The phone's workers the engine runs, as `AppWorkersGraph` lists them on the phone. Not the keep alive:
+     * WorkManager is held back while the watch is idle, so the engine runs its work itself (`EngineKeepAlive`).
      */
     val workerCreators: Map<KClass<out ListenableWorker>, MetroWorkerCreator>
     val runningModeExpiryScheduler: RunningModeExpiryScheduler
-
-    @Provides
-    @IntoMap
-    @WorkerKey(KeepAliveWorker::class)
-    fun bindKeepAliveWorker(factory: KeepAliveWorker.Factory): MetroWorkerCreator = factory
 
     @Provides
     @IntoMap

@@ -68,7 +68,10 @@ object WatchEngine {
         // A snapshot came while the engine ran, and the app restarted for it: start from the snapshot
         val snapshot = importPendingSnapshot()
         // No session, no test run and no snapshot: the engine does not run, and neither may its scheduled work
-        if (snapshot == null && !isActive()) WorkManager.getInstance(this.context).cancelAllWork()
+        if (snapshot == null && !isActive()) {
+            WorkManager.getInstance(this.context).cancelAllWork()
+            EngineKeepAlive.cancel(this.context)
+        }
         when {
             snapshot != null -> startFromSnapshot(snapshot)
             // The watch held a pump session, or ran a test, when the app stopped: carry on with it
@@ -104,6 +107,7 @@ object WatchEngine {
         graph?.appScope?.launch {
             // The keep alive and the other engine work stop with the engine
             WorkManager.getInstance(context).cancelAllWork()
+            EngineKeepAlive.cancel(context)
             delay(HANDBACK_RESTART_DELAY_MS)
             restartApp("the pump was handed back")
         }
@@ -116,6 +120,7 @@ object WatchEngine {
     fun stopTestRun() {
         stateFile().edit().putBoolean(TEST_RUN_KEY, false).commit()
         WorkManager.getInstance(context).cancelAllWork()
+        EngineKeepAlive.cancel(context)
         restartApp("the engine test run was stopped")
     }
 
@@ -130,7 +135,9 @@ object WatchEngine {
     /** True while the engine holds a pump session. Reads the settings file only. */
     fun hasSession(): Boolean {
         val prefs = context.getSharedPreferences(EngineBindings.PREFERENCES_FILE, Context.MODE_PRIVATE)
-        return prefs.getString(MedtrumStringNonKey.SnInput.key, "").orEmpty().isNotEmpty() &&
+        // "0" is the serial's default: no patch
+        val serial = prefs.getString(MedtrumStringNonKey.SnInput.key, "").orEmpty()
+        return serial.isNotEmpty() && serial != MedtrumStringNonKey.SnInput.defaultValue &&
             !prefs.getBoolean(MedtrumBooleanNonKey.SessionMovedAway.key, false)
     }
 
@@ -139,10 +146,17 @@ object WatchEngine {
 
     /** A message from the phone that is the engine's business. False when it is not. */
     fun onMessageFromPhone(data: EventData): Boolean = when (data) {
+        // The session alone, when the phone could not write a snapshot
         is EventData.MedtrumSessionToWatch -> {
-            start {
-                it.medtrumWatchLink.start()
-                it.medtrumWatchLink.receiveSession(data.session)
+            if (!started) start(pumpSession = data.session) { it.medtrumWatchLink.start() }
+            else {
+                // The engine runs, with the virtual pump or another session: the driver must start with this
+                // session, so the app restarts once and the engine starts with it (see [install])
+                val graph = graph()
+                graph.appScope.launch {
+                    graph.medtrumWatchLink.takeIn(data.session)
+                    restartApp("a pump session arrived while the engine ran")
+                }
             }
             true
         }
@@ -160,7 +174,15 @@ object WatchEngine {
         graph?.appScope?.launch {
             graph.watchG7Source.store(readings)
             readings.maxByOrNull { it.timestamp }?.let { graph.engineReporter.onReadingStored(it.timestamp, it.value) }
+            graph.engineKeepAlive.onReading()
         }
+    }
+
+    /** The alarm of the keep alive: no CGM reading for a while (see [EngineKeepAlive]). */
+    fun onKeepAliveAlarm() {
+        // Not started yet: the alarm started the app, and the engine's start runs the keep alive itself
+        if (!started) return
+        graph?.engineKeepAlive?.onAlarm()
     }
 
     private class Snapshot(val settings: Map<String, String>, val pumpSession: String)
@@ -216,16 +238,16 @@ object WatchEngine {
     }
 
     /**
-     * Starts the engine from a snapshot: the phone's settings go in before the plugins start, keeping the
-     * engine's own pump choice (the virtual pump while the engine is tested). The loop goes to open loop (it
-     * suggests, it does not dose) before the running mode check starts, see `startEngine`. Then the pump
-     * session.
+     * Starts the engine from a snapshot: the phone's settings and the pump session go in before the plugins
+     * start, so the engine's Medtrum driver starts with its patch (the virtual pump in a test run without
+     * one). The loop goes to open loop (it suggests, it does not dose) before the running mode check starts,
+     * see `startEngine`.
      */
     private fun startFromSnapshot(snapshot: Snapshot) {
-        start(settings = snapshot.settings, setRunningMode = { graph -> openLoop(graph) }) { graph ->
+        val pumpSession = snapshot.pumpSession.takeIf { it.isNotEmpty() }
+        start(settings = snapshot.settings, pumpSession = pumpSession, setRunningMode = { graph -> openLoop(graph) }) { graph ->
             graph.medtrumWatchLink.start()
-            if (snapshot.pumpSession.isNotEmpty()) graph.medtrumWatchLink.receiveSession(snapshot.pumpSession)
-            else graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
+            if (pumpSession == null) graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
         }
     }
 
@@ -281,6 +303,7 @@ object WatchEngine {
      */
     private fun start(
         settings: Map<String, String>? = null,
+        pumpSession: String? = null,
         setRunningMode: suspend (EngineGraph) -> Boolean = { true },
         then: (EngineGraph) -> Unit
     ) {
@@ -290,7 +313,7 @@ object WatchEngine {
             try {
                 startMutex.withLock {
                     if (!started) {
-                        graph.startEngine(settings) { setRunningMode(graph) }
+                        graph.startEngine(settings, pumpSession) { setRunningMode(graph) }
                         started = true
                     }
                 }

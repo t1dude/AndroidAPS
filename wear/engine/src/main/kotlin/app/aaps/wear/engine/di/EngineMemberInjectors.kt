@@ -2,7 +2,6 @@ package app.aaps.wear.engine.di
 
 import app.aaps.core.interfaces.di.FeatureMemberInjectors
 import app.aaps.wear.engine.medtrum.MedtrumWatchActivity
-import app.aaps.wear.engine.medtrum.MedtrumWatchAlarmReceiver
 import app.aaps.wear.engine.receivers.CarbSuggestionReceiver
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.BindingContainer
@@ -22,12 +21,6 @@ object EngineMemberInjectors {
     @IntoMap
     @ClassKey(MedtrumWatchActivity::class)
     fun bindMedtrumWatchActivity(injector: MembersInjector<MedtrumWatchActivity>): MembersInjector<*> = injector
-
-    @Provides
-    @FeatureMemberInjectors
-    @IntoMap
-    @ClassKey(MedtrumWatchAlarmReceiver::class)
-    fun bindMedtrumWatchAlarmReceiver(injector: MembersInjector<MedtrumWatchAlarmReceiver>): MembersInjector<*> = injector
 
     @Provides
     @FeatureMemberInjectors

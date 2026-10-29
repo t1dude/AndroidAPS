@@ -38,8 +38,8 @@ import java.util.Date
 import kotlin.math.roundToInt
 
 /**
- * Handover test on the watch: the Medtrum patch session the phone handed over. Reads the patch status,
- * now or every few minutes, and hands the session back. In a test run without a patch, it stops the engine.
+ * Handover test on the watch: the Medtrum patch session the phone handed over. Reads the patch status through
+ * the engine's driver and hands the session back. In a test run without a patch, it stops the engine.
  */
 class MedtrumWatchActivity : ComponentActivity() {
 
@@ -87,11 +87,6 @@ class MedtrumWatchActivity : ComponentActivity() {
                             item {
                                 Button(onClick = { link.readNow() }, enabled = !status.reading, modifier = Modifier.fillMaxWidth()) {
                                     Text(stringResource(if (status.reading) R.string.medtrum_watch_reading else R.string.medtrum_watch_read))
-                                }
-                            }
-                            item {
-                                Button(onClick = { link.setAutoRead(!status.autoRead) }, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(if (status.autoRead) R.string.medtrum_watch_auto_off else R.string.medtrum_watch_auto_on))
                                 }
                             }
                             item {

@@ -13,6 +13,7 @@ import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.MedtrumTestBase
 import app.aaps.pump.medtrum.R
 import app.aaps.pump.medtrum.comm.enums.BasalType
+import app.aaps.pump.medtrum.keys.MedtrumIntNonKey
 import com.google.common.truth.Truth.assertThat
 import kotlinx.coroutines.test.runTest
 import org.junit.jupiter.api.BeforeEach
@@ -125,5 +126,33 @@ class MedtrumSessionTakeInTest : MedtrumTestBase() {
 
         verify(pumpSync, never()).syncTemporaryBasalWithPumpId(any(), any(), any(), any(), any(), any(), any(), any())
         verify(persistenceLayer, never()).clearCachedTddData(any())
+    }
+
+    /** Step 2 of the handover: the phone gets every record the watch made, from the patch itself. */
+    @Test
+    fun `the patch history the watch read is read again from where this phone was at move out`() {
+        whenever(preferences.get(MedtrumIntNonKey.SyncedSequenceAtMoveOut)).thenReturn(418)
+        whenever(rh.gs(R.string.handover_test_history_read_again)).thenReturn("%1${'$'}d records")
+        pump.syncedSequenceNumber = 431
+
+        val note = transfer.readHistoryAgain(samePatch = true)
+
+        assertThat(pump.syncedSequenceNumber).isEqualTo(418)
+        assertThat(note).isEqualTo("13 records")
+        // Used once: a later take in must not read from an old position
+        verify(preferences).put(MedtrumIntNonKey.SyncedSequenceAtMoveOut, -1)
+    }
+
+    @Test
+    fun `nothing is read again for another patch or when this phone never moved the session out`() {
+        pump.syncedSequenceNumber = 431
+
+        whenever(preferences.get(MedtrumIntNonKey.SyncedSequenceAtMoveOut)).thenReturn(418)
+        assertThat(transfer.readHistoryAgain(samePatch = false)).isNull()
+        assertThat(pump.syncedSequenceNumber).isEqualTo(431)
+
+        whenever(preferences.get(MedtrumIntNonKey.SyncedSequenceAtMoveOut)).thenReturn(-1)
+        assertThat(transfer.readHistoryAgain(samePatch = true)).isNull()
+        assertThat(pump.syncedSequenceNumber).isEqualTo(431)
     }
 }

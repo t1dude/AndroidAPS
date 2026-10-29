@@ -151,12 +151,12 @@
     <!-- Handover test (phase 0): move a running patch session to another phone and back -->
     <string name="handover_test_move_to_watch">Move patch session to watch (test)</string>
     <string name="handover_test_take_in">Take patch session in (test)</string>
-    <string name="handover_test_move_to_watch_confirm">The running patch session is sent to the AAPS app on the watch, and this phone stops talking to the patch until you take a session back in. A file with the session is also written to the AAPS exports folder, so this phone can take it back if the watch never gets it.\n\nThe loop on this phone is turned off (Disable loop). Before you go on: no bolus running, and the watch has the same AAPS build.\n\nThe watch only reads the patch status. It sends no bolus or basal.</string>
+    <string name="handover_test_move_to_watch_confirm">The running patch session is sent to the AAPS app on the watch, and this phone stops talking to the patch until you take a session back in. A file with the session is also written to the AAPS handover folder, so this phone can take it back if the watch never gets it.\n\nThe loop on this phone is turned off (Disable loop). Before you go on: no bolus running, and the watch has the same AAPS build.\n\nThe watch only reads the patch status. It sends no bolus or basal.</string>
     <string name="handover_test_send_snapshot">Start engine on watch, keep patch (test)</string>
     <string name="handover_test_send_snapshot_confirm">The settings and history of this phone are sent to the AAPS app on the watch. The engine on the watch starts with them, in open loop, with its own virtual pump.\n\nThis phone keeps the patch and its loop. The watch does not talk to the patch.\n\nThe engine runs until you stop it on the watch: Medtrum test, Stop engine.</string>
     <string name="handover_test_snapshot_sent">Sent to the watch. The engine on the watch starts in open loop with its virtual pump. Stop it on the watch: Medtrum test, Stop engine.</string>
     <string name="handover_test_snapshot_failed">The snapshot for the watch could not be written. See the log.</string>
-    <string name="handover_test_take_in_confirm">This phone takes in the newest patch session file from its AAPS exports folder and then talks to that patch.\n\nOnly do this after the watch has handed the session back, or when the watch never got it. Two devices must never talk to the patch at the same time.</string>
+    <string name="handover_test_take_in_confirm">This phone takes in the newest patch session file from its AAPS handover folder and then talks to that patch.\n\nOnly do this after the watch has handed the session back, or when the watch never got it. Two devices must never talk to the patch at the same time.</string>
     <string name="handover_test_loop_disabled" comment="%1$s=the running mode before, for example Closed Loop">The loop was turned off (Disable loop). It was: %1$s. You will be asked to turn it back on when this phone takes a session back in.</string>
     <string name="handover_test_loop_not_disabled">The loop could not be turned off. Turn it off yourself (Disable loop) before you go on.</string>
     <string name="handover_test_restore_mode" comment="%1$s=what happened (a whole message), %2$s=the running mode, for example Closed Loop">%1$s\n\nTurn the loop back on as %2$s?</string>
@@ -166,7 +166,7 @@
     <string name="handover_test_busy">The pump is busy. Wait until the command queue is empty and no bolus is running.</string>
     <string name="handover_test_no_directory">No AAPS directory. Choose one in Maintenance first.</string>
     <string name="handover_test_write_failed">The session file could not be written. The patch stays on this phone.</string>
-    <string name="handover_test_moved_to_watch" comment="%1$s=file name, for example exports/Medtrum_session_2026-10-16_220000.txt">Sent to the watch. Open Medtrum test on the watch to read the patch status. A copy is in %1$s.</string>
+    <string name="handover_test_moved_to_watch" comment="%1$s=file name, for example handover/Medtrum_session_2026-10-16_220000.txt">Sent to the watch. Open Medtrum test on the watch to read the patch status. A copy is in %1$s.</string>
     <string name="handover_test_no_snapshot">The snapshot for the watch (settings and history) could not be written. The session went to the watch alone. See the log.</string>
     <string name="handover_test_from_watch">The watch handed the Medtrum patch session back. Open the Medtrum page and tap Take patch session in.</string>
     <string name="handover_test_sent_with_tbr" comment="%1$d=number of days, %2$s=temp basal rate, for example 0.00 U/h or 120%, %3$s=time it ends, for example 18:00">Sent along: the total daily dose of %1$d days, and the running temp basal (%2$s until %3$s).</string>
@@ -174,9 +174,10 @@
     <string name="handover_test_rate_absolute" comment="%1$.2f=basal rate in units per hour">%1$.2f U/h</string>
     <string name="handover_test_rate_percent" comment="%1$d=percent of the profile basal">%1$d%%</string>
     <string name="handover_test_basal_applied" comment="%1$s=time of the read, for example 16:28">The basal the patch had at the other device\'s last read (%1$s) is now in this phone\'s treatments.</string>
+    <string name="handover_test_history_read_again" comment="%1$d=number of records, for example 12">The patch history the watch read (%1$d records) is read again at the next status read, so this phone gets everything the watch did.</string>
     <string name="handover_test_tdd_recalculated" comment="%1$s=date">The total daily doses from %1$s on will be calculated again.</string>
     <string name="handover_test_has_own_patch">This phone still has its own patch session. Move it to the watch first, or unpair.</string>
-    <string name="handover_test_no_file">No patch session file in the AAPS exports folder (a file starting with Medtrum_session_).</string>
+    <string name="handover_test_no_file">No patch session file in the AAPS handover folder (a file starting with Medtrum_session_).</string>
     <string name="handover_test_bad_file" comment="%1$s=file name">%1$s is not a patch session file.</string>
     <string name="handover_test_taken_in" comment="%1$s=file name, %2$s=date and time it was moved out">Took in %1$s, moved out %2$s. This phone now drives the patch. Use Refresh to read its status.</string>
 </resources>

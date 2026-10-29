@@ -1,22 +1,20 @@
 # Handover: the watch runs the loop and drives the pump
 
-**Status (2026-10-28): Phase 0 and Phase 1 in progress. Nothing here is confirmed as working on the
-watch yet.**
+**Status (2026-10-29): the engine runs on the watch; steps 0 and 1 of driving the patch are built and
+not yet tested on the watch. Nothing here is confirmed as working on the watch beyond what the watch tests
+below show.**
 
-- Built: Dexcom G7 direct-to-watch; T1 for Medtrum (see the T1 result below); the `:wear:engine`
-  module with its own graph, settings and database; the handover snapshot; the phone's workers in the
-  engine.
-- The engine's loop gave its first results on the watch (test of 2026-10-28, see "First loop results on
-  the watch" below), in open loop with the virtual pump. Short test only: 2 loop runs in 1.5 minutes.
-  The earlier watch tests each found one cause of no loop result (missing workers, the permanent
-  profile switch cut out of the snapshot, `definition.json` missing from the engine's assets).
-- Fixed after that test, and seen working in the second watch test: no temp basal cancel at the start,
-  no widget errors, the patch's last connection. The second test found that the loop then stayed
-  disabled (the mode was set before init); fixed, not yet tested on the watch.
-- Next: a longer open loop test on the watch (the start of T2), then the session in the engine's own
-  Medtrum plugin. Before closed loop: the 30-minute limit for temp basals on the watch.
-- Not started: T1 for Dash and Omnipod 5, T2, the Watch-APS pieces (`SingleControllerPlugin`, alarm
-  loop cycle, keep alive, sensor watchdog), Phase 2 to 4.
+- Seen working on the watch: Dexcom G7 direct-to-watch; T1 for Medtrum (see the T1 result); the engine
+  started from the snapshot, open loop set at the start, a loop result on every G7 reading (18 of 18 in
+  1 h 24 min, test run without a patch on 2026-10-29), about 1.4 % battery per hour for engine, G7 and
+  companion together; the test log as a file with its summary.
+- Seen not working: WorkManager's keep alive on the watch (13 to 29 minutes late). Replaced (decision 10).
+- Built, not yet tested on the watch: steps 0 and 1, the minimal part of step 2, the `handover` folder
+  (see "Steps to driving the patch").
+- Next: a watch test of step 1 with the patch (status reads through the driver, the history position the same on
+  both sides, the history read again on the phone at take in), then step 3.
+- Not started: T1 for Dash and Omnipod 5, the battery baseline without the engine, the Watch-APS pieces
+  (`SingleControllerPlugin`, sensor watchdog), steps 3 to 5, Phase 3.
 
 ## Goal
 
@@ -35,6 +33,44 @@ second button hands everything back. The phone never talks to the pump while the
 | 5 | Nightscout | Off on the watch. Records are synced through the phone at handback. |
 | 6 | Testing | The user has all three pumps and tests them all. Medtrum is the pump in use now, so it goes first. |
 | 7 | Watch-APS | tim2000s agrees to us building on his work. |
+
+## Decisions (user, 2026-10-29), after the engine ran on the watch
+
+| # | Question | Decision |
+|---|---|---|
+| 8 | Loop modes on the watch | **Closed loop, LGS, Suspend pump.** The engine refuses every other mode. Open loop stays only as the test stage of steps 1 to 3 (it suggests, it doses nothing), and goes when LGS works. |
+| 9 | Notifications on the watch | Decided after the modes, not now: pump alarms, CGM alarms, loop not running, "hand back to the phone" (patch expiry, low reservoir). No open loop suggestions. |
+| 10 | Waking the engine | Not an alarm for the loop: without CGM values the loop has nothing to do. The G7 wakes the engine. A **fallback alarm** takes over the keep alive's work when no reading came for 7 minutes, then every 5 minutes. WorkManager's keep alive is not used on the watch. |
+| 11 | Files between phone and watch | In their own folder, `handover`, next to `exports` in the AAPS folder. Made when the AAPS folder is chosen, and at app start. |
+
+## Steps to driving the patch (agreed 2026-10-29)
+
+Each step is a watch test before the next.
+
+- **Step 0: the phone cannot drive the patch while the watch has it.** Built 2026-10-29: the Medtrum
+  transport refuses every connect while the session is away (both its connect paths, before anything
+  touches Bluetooth). Every path to the patch goes through it: service, command queue, keep alive,
+  automation and SMS through the queue, the patch screens. Before that only the service and the plugin
+  checked. `MovedAwaySessionTest`.
+- **Step 1: the engine's own Medtrum driver takes the session.** Built 2026-10-29, not yet tested on the
+  watch. The session is taken in before the plugins start, and the engine's pump is `MedtrumPlugin` while
+  it holds a session (the virtual pump in a test run). The watch's own test reader is gone (one connection
+  at a time). The keep alive's work moved out of `KeepAliveWorker` into `KeepAliveCheck`, which the phone's
+  worker and the watch's `EngineKeepAlive` both run; on the watch on every reading, at the start, and from
+  the fallback alarm. Open loop: the loop sends nothing. The driver itself does connect: status reads, the
+  patch history, the profile when the patch does not have it, the time after a time zone change, as on
+  the phone. The open loop notification has no accept action, so nothing doses through it. No pump setup
+  screen exists on the watch (decision 3).
+- **Step 2: the records come back from the patch itself.** The minimal part built 2026-10-29: the phone
+  keeps its history position at move out (`SyncedSequenceAtMoveOut`, a phone-only setting) and at take in
+  reads the patch history again from there. So it gets every record the watch made, keyed by pump id
+  (nothing twice), also when the watch was lost and the session is taken in from the move-out file.
+  Open: how far back the patch history goes. A handover longer than the patch keeps records would lose
+  some.
+- **Step 3: one supervised command from the watch**: a 0 U/h temp basal for 30 minutes, then cancel. On
+  the patch, and in the phone's treatments after hand back.
+- **Step 4: LGS on the watch.** Open loop goes then (decision 8).
+- **Step 5: closed loop**, with the 30-minute limit for temp basals as an engine constraint.
 
 ## What Watch-APS gives us, and what it does not
 

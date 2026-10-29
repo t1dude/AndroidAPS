@@ -523,6 +523,8 @@ class MainApp : Application(), MetroMemberInjector, MetroViewModelFactoryOwner, 
         setUserStats()
         passwordResetCheck()
         exportPasswordResetCheck()
+        // The handover folder is part of the AAPS folder: an AAPS folder chosen before it existed gets it here
+        fileListProvider.ensureHandoverDirExists()
         config.initCompleted()
         rxBus.send(EventAppInitialized())
         aapsLogger.debug("doInit end")

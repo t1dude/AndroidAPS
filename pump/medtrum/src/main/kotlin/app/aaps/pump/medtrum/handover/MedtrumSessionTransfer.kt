@@ -33,6 +33,7 @@ import app.aaps.pump.medtrum.MedtrumPump
 import app.aaps.pump.medtrum.R
 import app.aaps.pump.medtrum.handover.MedtrumSession.Companion.writeTo
 import app.aaps.pump.medtrum.keys.MedtrumBooleanNonKey
+import app.aaps.pump.medtrum.keys.MedtrumIntNonKey
 import app.aaps.pump.medtrum.keys.MedtrumStringNonKey
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.Inject
@@ -57,7 +58,7 @@ import kotlin.math.roundToInt
  * device may talk to the patch, so the phone that moved its session away does not connect to the patch
  * again until it takes a session back in.
  *
- * A copy of the session is written to a file in the AAPS exports folder, as the way back when the watch
+ * A copy of the session is written to a file in the AAPS handover folder, as the way back when the watch
  * never gets it, and the watch's hand back is saved there too. The file holds the patch serial and
  * session token: anyone with it can talk to the patch. Delete it after the test.
  *
@@ -120,11 +121,13 @@ class MedtrumSessionTransfer(
         if (medtrumPump.pumpSN == 0L) return@withContext Result(rh.gs(R.string.handover_test_no_patch))
         if (isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_already_moved))
         if (commandQueue.size() > 0 || commandQueue.performing() != null) return@withContext Result(rh.gs(R.string.handover_test_busy))
-        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
+        val dir = fileListProvider.ensureHandoverDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
         // Stop talking to the patch first: the session must not move on after the file is written. From here
         // the plugin reports no active patch, so AAPS neither connects nor sends commands.
         preferences.put(MedtrumBooleanNonKey.SessionMovedAway, true)
         _movedAway.value = true
+        // Where this phone's history of the patch ends: at take in it reads the patch history again from here
+        preferences.put(MedtrumIntNonKey.SyncedSequenceAtMoveOut, medtrumPump.syncedSequenceNumber)
         medtrumPump.takenInSerial = null
         medtrumPlugin.getService()?.disconnect("Handover test: session moved away")
         val loopNote = turnLoopOff()
@@ -138,12 +141,13 @@ class MedtrumSessionTransfer(
         written.exceptionOrNull()?.let {
             aapsLogger.error(LTag.PUMP, "Handover test: writing the session failed", it)
             preferences.put(MedtrumBooleanNonKey.SessionMovedAway, false)
+            preferences.put(MedtrumIntNonKey.SyncedSequenceAtMoveOut, -1)
             _movedAway.value = false
             return@withContext Result(rh.gs(R.string.handover_test_write_failed), modeToRestore = rememberedMode())
         }
-        aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to exports/$name")
+        aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} moved out to handover/$name")
         val snapshotNote = sendToWatch(session)
-        val moved = rh.gs(R.string.handover_test_moved_to_watch, "exports/$name")
+        val moved = rh.gs(R.string.handover_test_moved_to_watch, "handover/$name")
         Result(listOfNotNull(moved, describeSent(extras), snapshotNote, loopNote).joinToString("\n\n"))
     }
 
@@ -161,18 +165,19 @@ class MedtrumSessionTransfer(
     }
 
     /**
-     * Takes in the newest session file from the exports folder. When this phone turned its loop off at
+     * Takes in the newest session file from the handover folder. When this phone turned its loop off at
      * move out, the result offers that mode again.
      */
     suspend fun takeIn(): Result = withContext(Dispatchers.IO) {
         if (medtrumPump.pumpSN != 0L && !isMovedAway) return@withContext Result(rh.gs(R.string.handover_test_has_own_patch))
-        val dir = fileListProvider.ensureExportDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
+        val dir = fileListProvider.ensureHandoverDirExists() ?: return@withContext Result(rh.gs(R.string.handover_test_no_directory))
         val file = dir.listFiles()
             .filter { it.name?.startsWith(MedtrumSession.FILE_PREFIX) == true }
             .maxByOrNull { it.lastModified() }
             ?: return@withContext Result(rh.gs(R.string.handover_test_no_file))
         val session = runCatching { context.contentResolver.openInputStream(file.uri)?.use { MedtrumSession.parse(it.readBytes().decodeToString()) } }.getOrNull()
         if (session == null || session.serial == 0L) return@withContext Result(rh.gs(R.string.handover_test_bad_file, file.name ?: "?"))
+        val samePatch = session.serial == medtrumPump.pumpSN
         // Before the serial is written: the service resets a patch whose serial changes, unless it is this one
         medtrumPump.takenInSerial = session.serial
         session.writeTo(preferences)
@@ -180,11 +185,30 @@ class MedtrumSessionTransfer(
         _movedAway.value = false
         medtrumPump.loadVarsFromSP()
         medtrumPump.loadUserSettingsFromSP()
+        val historyNote = readHistoryAgain(samePatch)
         val basalNote = applyExtras(session.extras)
         notificationManager.dismiss(NotificationId.PUMP_SESSION_FROM_WATCH)
         aapsLogger.info(LTag.PUMP, "Handover test: session of patch ${session.serial.toString(16)} taken in from ${file.name}, exported ${dateUtil.dateAndTimeString(session.exportedAt)}")
         val takenIn = rh.gs(R.string.handover_test_taken_in, file.name ?: "?", dateUtil.dateAndTimeString(session.exportedAt))
-        Result(listOfNotNull(takenIn, basalNote).joinToString("\n\n"), modeToRestore = rememberedMode())
+        Result(listOfNotNull(takenIn, historyNote, basalNote).joinToString("\n\n"), modeToRestore = rememberedMode())
+    }
+
+    /**
+     * The other device read the patch history too, and moved the history position on. Set back to where
+     * this phone was at move out, its next status read gets every record the other device made from the
+     * patch itself: boluses, temporary basals, suspends. Each record is keyed by its pump id, so a record
+     * already here is not added twice. This also works when the watch was lost and the session is taken in
+     * from the file written at move out.
+     */
+    @VisibleForTesting
+    internal fun readHistoryAgain(samePatch: Boolean): String? {
+        val readFrom = preferences.get(MedtrumIntNonKey.SyncedSequenceAtMoveOut)
+        preferences.put(MedtrumIntNonKey.SyncedSequenceAtMoveOut, -1)
+        if (!samePatch || readFrom < 0 || readFrom >= medtrumPump.syncedSequenceNumber) return null
+        val records = medtrumPump.syncedSequenceNumber - readFrom
+        medtrumPump.syncedSequenceNumber = readFrom
+        aapsLogger.info(LTag.PUMP, "Handover: the patch history from record ${readFrom + 1} is read again ($records records)")
+        return rh.gs(R.string.handover_test_history_read_again, records)
     }
 
     /**
@@ -216,8 +240,8 @@ class MedtrumSessionTransfer(
             aapsLogger.error(LTag.PUMP, "Handover test: the watch sent a session that cannot be read")
             return@withContext
         }
-        val dir = fileListProvider.ensureExportDirExists() ?: run {
-            aapsLogger.error(LTag.PUMP, "Handover test: no exports folder for the session from the watch")
+        val dir = fileListProvider.ensureHandoverDirExists() ?: run {
+            aapsLogger.error(LTag.PUMP, "Handover test: no handover folder for the session from the watch")
             return@withContext
         }
         val name = MedtrumSession.FILE_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + "_watch.txt"
@@ -229,22 +253,22 @@ class MedtrumSessionTransfer(
             aapsLogger.error(LTag.PUMP, "Handover test: saving the session from the watch failed", it)
             return@withContext
         }
-        aapsLogger.info(LTag.PUMP, "Handover test: the watch handed back the session of patch ${session.serial.toString(16)}, saved as exports/$name")
+        aapsLogger.info(LTag.PUMP, "Handover test: the watch handed back the session of patch ${session.serial.toString(16)}, saved as handover/$name")
         notificationManager.post(NotificationId.PUMP_SESSION_FROM_WATCH, rh.gs(R.string.handover_test_from_watch))
     }
 
     /** The watch's test log goes next to the session files, as Medtrum_watch_log_<date>.txt. */
     private suspend fun saveWatchLog(log: String) = withContext(Dispatchers.IO) {
         if (log.isBlank()) return@withContext
-        val dir = fileListProvider.ensureExportDirExists() ?: run {
-            aapsLogger.error(LTag.PUMP, "Handover test: no exports folder for the watch log")
+        val dir = fileListProvider.ensureHandoverDirExists() ?: run {
+            aapsLogger.error(LTag.PUMP, "Handover test: no handover folder for the watch log")
             return@withContext
         }
         val name = WATCH_LOG_PREFIX + SimpleDateFormat("yyyy-MM-dd_HHmmss", Locale.US).format(Date()) + ".txt"
         runCatching {
             val file = dir.createFile("text/plain", name) ?: error("could not create $name")
             context.contentResolver.openOutputStream(file.uri)?.use { it.write(log.toByteArray()) } ?: error("could not write $name")
-        }.onSuccess { aapsLogger.info(LTag.PUMP, "Handover test: watch log saved as exports/$name") }
+        }.onSuccess { aapsLogger.info(LTag.PUMP, "Handover test: watch log saved as handover/$name") }
             .onFailure { aapsLogger.error(LTag.PUMP, "Handover test: saving the watch log failed", it) }
     }
 
@@ -258,8 +282,7 @@ class MedtrumSessionTransfer(
             ?.map { HandoverTdd(it.timestamp, it.basalAmount, it.bolusAmount, it.totalAmount, it.carbs) }
             ?.sortedBy { it.timestamp }
             .orEmpty()
-        val temporaryBasal = pumpSync.expectedPumpState().temporaryBasal
-            ?.let { HandoverTemporaryBasal(it.timestamp, it.duration, it.rate, it.isAbsolute, it.type.name, it.pumpId) }
+        val temporaryBasal = pumpSync.expectedPumpState().temporaryBasal?.let { HandoverTemporaryBasal.of(it) }
         val basalStatus = medtrumPump.basalStatus(readAt = medtrumPump.lastConnection)
         aapsLogger.info(LTag.PUMP, "Handover test: sending ${tdds.size} daily doses, temporary basal $temporaryBasal, basal status $basalStatus")
         return HandoverExtras(tdds = tdds, temporaryBasal = temporaryBasal, basalStatus = basalStatus, movedOutAt = dateUtil.now())

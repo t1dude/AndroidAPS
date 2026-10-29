@@ -63,6 +63,7 @@ class FileListProviderImpl(
     val exportsPath = "exports"
     val tempPath = "temp"
     val extraPath = "extra"
+    val handoverPath = "handover"
 
     companion object {
 
@@ -170,6 +171,14 @@ class FileListProviderImpl(
         val baseDir = DocumentFile.fromTreeUri(context, uri)
         val files = baseDir?.listFiles()
         return files?.firstOrNull { it.name == extraPath } ?: baseDir?.createDirectory(extraPath)
+    }
+
+    override fun ensureHandoverDirExists(): DocumentFile? {
+        val prefUri = preferences().getIfExists(StringKey.AapsDirectoryUri) ?: return null
+        val uri = prefUri.toUri()
+        val baseDir = DocumentFile.fromTreeUri(context, uri)
+        val files = baseDir?.listFiles()
+        return files?.firstOrNull { it.name == handoverPath } ?: baseDir?.createDirectory(handoverPath)
     }
 
     override fun ensureResultDirExists(): File {

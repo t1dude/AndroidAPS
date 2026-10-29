@@ -1,5 +1,6 @@
 package app.aaps.pump.medtrum.handover
 
+import app.aaps.core.interfaces.pump.PumpSync
 import app.aaps.pump.medtrum.comm.enums.BasalType
 
 /**
@@ -79,6 +80,10 @@ data class HandoverTemporaryBasal(val timestamp: Long, val duration: Long, val r
     fun encode(): String = listOf(timestamp, duration, rate, isAbsolute, type, pumpId ?: "").joinToString(",")
 
     companion object {
+
+        /** The temporary basal AAPS knows is running, as it goes along with the session. */
+        fun of(temporaryBasal: PumpSync.PumpState.TemporaryBasal): HandoverTemporaryBasal =
+            with(temporaryBasal) { HandoverTemporaryBasal(timestamp, duration, rate, isAbsolute, type.name, pumpId) }
 
         fun decode(text: String): HandoverTemporaryBasal? {
             val parts = text.split(',')

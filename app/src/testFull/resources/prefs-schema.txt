@@ -300,6 +300,7 @@ medtronic_tbrs_set|MedtronicLongNonKey|true
 medtrum_mode_before_move_out|MedtrumStringNonKey|false
 medtrum_session_moved_away|MedtrumBooleanNonKey|false
 medtrum_session_token|MedtrumLongNonKey|true
+medtrum_synced_sequence_at_move_out|MedtrumIntNonKey|false
 missed_bg_readings_threshold|IntKey|true
 nextMissedReadingsAlarm|LocalAlertLongKey|false
 nextPumpDisconnectedAlarm|LocalAlertLongKey|false

@@ -1,18 +1,21 @@
 # Handover: the watch runs the loop and drives the pump
 
-**Status (2026-10-29): the engine runs on the watch; steps 0 and 1 of driving the patch are built and
-not yet tested on the watch. Nothing here is confirmed as working on the watch beyond what the watch tests
-below show.**
+**Status (2026-10-29): the engine runs on the watch and reads the patch through its own Medtrum driver
+(first test with the patch, 47 minutes). Nothing here is confirmed as working on the watch beyond what the
+watch tests below show.**
 
 - Seen working on the watch: Dexcom G7 direct-to-watch; T1 for Medtrum (see the T1 result); the engine
   started from the snapshot, open loop set at the start, a loop result on every G7 reading (18 of 18 in
   1 h 24 min, test run without a patch on 2026-10-29), about 1.4 % battery per hour for engine, G7 and
-  companion together; the test log as a file with its summary.
-- Seen not working: WorkManager's keep alive on the watch (13 to 29 minutes late). Replaced (decision 10).
-- Built, not yet tested on the watch: steps 0 and 1, the minimal part of step 2, the `handover` folder
-  (see "Steps to driving the patch").
-- Next: a watch test of step 1 with the patch (status reads through the driver, the history position the same on
-  both sides, the history read again on the phone at take in), then step 3.
+  companion together; the test log as a file with its summary. Step 1 with the patch (see "First test with
+  the patch").
+- Seen working on the phone: step 2's history read again at take in (the end of the temp basal the watch
+  threw away came back from the patch, no duplicate).
+- Seen not working: WorkManager's keep alive on the watch (13 to 29 minutes late), replaced (decision 10).
+  The watch threw away the patch's records: it still had the virtual pump of an earlier test registered.
+  Fixed (the phone's pump identity goes along), not yet tested on the watch.
+- Next: one more short test with the patch for the pump identity (no "Ignoring pump history record", no
+  "wrong pump data" notification, every read in the log), then step 3.
 - Not started: T1 for Dash and Omnipod 5, the battery baseline without the engine, the Watch-APS pieces
   (`SingleControllerPlugin`, sensor watchdog), steps 3 to 5, Phase 3.
 
@@ -52,8 +55,8 @@ Each step is a watch test before the next.
   touches Bluetooth). Every path to the patch goes through it: service, command queue, keep alive,
   automation and SMS through the queue, the patch screens. Before that only the service and the plugin
   checked. `MovedAwaySessionTest`.
-- **Step 1: the engine's own Medtrum driver takes the session.** Built 2026-10-29, not yet tested on the
-  watch. The session is taken in before the plugins start, and the engine's pump is `MedtrumPlugin` while
+- **Step 1: the engine's own Medtrum driver takes the session.** Built 2026-10-29, tested once with the
+  patch (below). The session is taken in before the plugins start, and the engine's pump is `MedtrumPlugin` while
   it holds a session (the virtual pump in a test run). The watch's own test reader is gone (one connection
   at a time). The keep alive's work moved out of `KeepAliveWorker` into `KeepAliveCheck`, which the phone's
   worker and the watch's `EngineKeepAlive` both run; on the watch on every reading, at the start, and from
@@ -61,10 +64,25 @@ Each step is a watch test before the next.
   patch history, the profile when the patch does not have it, the time after a time zone change, as on
   the phone. The open loop notification has no accept action, so nothing doses through it. No pump setup
   screen exists on the watch (decision 3).
+  **First test with the patch (2026-10-29, 19:07 to 19:54).** The engine started with `MedtrumPlugin`, open
+  loop, the phone's temp basal (2.20 U/h until 19:35:58) came along. 10 loop results in 47 minutes, none
+  missed, the keep alive never late. Reads through the driver: the button read at 19:07, then the keep
+  alive's (it reads when the last read is 15 minutes old, as on the phone), which the test log did not show;
+  it shows every read now, with what asked for it. Handed back with no temp basal running (right: it had
+  ended), history 43/43. Battery 2.8 % per hour, against 1.4 without the patch (a short sample).
+  **Found:** at 19:45 the watch threw away the patch's record of the temp basal's end ("Ignoring pump history
+  record ... Generic AAPS", and a "wrong pump data" notification). The pump AAPS takes records from is
+  device state (`ActivePumpType`, `ActivePumpSerialNumber`, `ActivePumpChangeTimestamp`, not exportable), so
+  the snapshot did not carry it, and the watch still had the virtual pump of the test on 2026-10-17. From
+  step 3 on, every temp basal and bolus of the watch would have been lost from its records, and its IOB
+  wrong. Fixed: the snapshot's manifest carries the phone's pump identity and the engine writes it right
+  after taking the session in (`HandoverSnapshot.PumpIdentity`, `EngineStartTest`). The phone's time, not
+  one made on the watch: the rejected record was of a temp basal from before the handover.
 - **Step 2: the records come back from the patch itself.** The minimal part built 2026-10-29: the phone
   keeps its history position at move out (`SyncedSequenceAtMoveOut`, a phone-only setting) and at take in
   reads the patch history again from there. So it gets every record the watch made, keyed by pump id
   (nothing twice), also when the watch was lost and the session is taken in from the move-out file.
+  Seen on the phone in the first test with the patch: the end of the temp basal came back, no duplicate.
   Open: how far back the patch history goes. A handover longer than the patch keeps records would lose
   some.
 - **Step 3: one supervised command from the watch**: a 0 U/h temp basal for 30 minutes, then cancel. On

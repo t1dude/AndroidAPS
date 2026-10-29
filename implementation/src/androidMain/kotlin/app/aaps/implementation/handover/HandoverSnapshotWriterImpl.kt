@@ -9,6 +9,8 @@ import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.sharedPreferences.KeyValueStore
 import app.aaps.core.interfaces.utils.DateUtil
+import app.aaps.core.keys.LongNonKey
+import app.aaps.core.keys.StringNonKey
 import app.aaps.core.keys.interfaces.Preferences
 import dev.zacsweers.metro.AppScope
 import dev.zacsweers.metro.ContributesBinding
@@ -62,7 +64,7 @@ class HandoverSnapshotWriterImpl(
                 HandoverSnapshot.KEY_BUILD_VERSION to config.BUILD_VERSION,
                 HandoverSnapshot.KEY_CREATED_AT to now.toString(),
                 HandoverSnapshot.KEY_ENGINEERING_MODE to config.isEngineeringMode().toString()
-            )
+            ) + pumpIdentity()?.toManifest().orEmpty()
             ZipOutputStream(target.outputStream().buffered()).use { zip ->
                 zip.putText(HandoverSnapshot.MANIFEST, HandoverSnapshot.encodeLines(manifest))
                 zip.putText(HandoverSnapshot.SETTINGS, HandoverSnapshot.encodeLines(settings))
@@ -81,6 +83,14 @@ class HandoverSnapshotWriterImpl(
         }.also {
             databaseCopy.delete()
         }.isSuccess
+    }
+
+    /** The pump this phone takes records from, or null when none is registered yet. */
+    private fun pumpIdentity(): HandoverSnapshot.PumpIdentity? {
+        val type = preferences.get(StringNonKey.ActivePumpType)
+        val serial = preferences.get(StringNonKey.ActivePumpSerialNumber)
+        if (type.isEmpty() || serial.isEmpty()) return null
+        return HandoverSnapshot.PumpIdentity(type, serial, preferences.get(LongNonKey.ActivePumpChangeTimestamp))
     }
 
     private fun ZipOutputStream.putText(name: String, text: String) {

@@ -1,11 +1,14 @@
 package app.aaps.wear.engine
 
 import app.aaps.core.data.plugin.PluginType
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.LTag
 import app.aaps.core.interfaces.maintenance.Prefs
 import app.aaps.core.interfaces.plugin.PluginBase
 import app.aaps.core.interfaces.rx.events.EventAppInitialized
 import app.aaps.core.keys.BooleanComposedKey
+import app.aaps.core.keys.LongNonKey
+import app.aaps.core.keys.StringNonKey
 import app.aaps.pump.medtrum.MedtrumPlugin
 import app.aaps.pump.virtual.VirtualPumpPlugin
 import app.aaps.wear.engine.di.EngineGraph
@@ -18,8 +21,8 @@ private const val PLUGIN_START_WAIT_MS = 60_000L
 
 /**
  * Starts the engine, as `MainApp` starts the phone: the plugin list without what the watch does not run, the
- * phone's [settings] if a snapshot brought them (keeping the engine's own pump), the [pumpSession] if one came,
- * the engine's pump ([selectPump]), the plugins the settings enable, then the running mode check. Called
+ * phone's [settings] if a snapshot brought them (keeping the engine's own pump), the [pumpSession] if one came
+ * with the phone's [pumpIdentity] ([takePumpIdentity]), the engine's pump ([selectPump]), the plugins the settings enable, then the running mode check. Called
  * once per process by `WatchEngine`; kept here so a test can run the same start on a graph of its own.
  *
  * [setRunningMode] runs after init has completed and before the running mode check. A snapshot brings the
@@ -30,6 +33,7 @@ private const val PLUGIN_START_WAIT_MS = 60_000L
 internal suspend fun EngineGraph.startEngine(
     settings: Map<String, String>?,
     pumpSession: String? = null,
+    pumpIdentity: HandoverSnapshot.PumpIdentity? = null,
     setRunningMode: suspend () -> Boolean = { true }
 ) {
     EngineStringOwners.registerAll()
@@ -53,7 +57,10 @@ internal suspend fun EngineGraph.startEngine(
     }
     // After the settings, which leave the engine's pump settings as they were; before the plugins start, so
     // the Medtrum driver starts with its patch
-    if (pumpSession != null) medtrumWatchLink.takeIn(pumpSession)
+    if (pumpSession != null) {
+        medtrumWatchLink.takeIn(pumpSession)
+        takePumpIdentity(pumpIdentity)
+    }
     selectPump(medtrum = medtrumWatchLink.holdsSession)
     val pluginsStarted = configBuilder.initialize()
     if (withTimeoutOrNull(PLUGIN_START_WAIT_MS) { pluginsStarted.joinAll() } == null)
@@ -77,6 +84,24 @@ internal suspend fun EngineGraph.startEngine(
     // As MainApp does on the phone: the pump gets the running profile, its status is read, the pump
     // unreachable alarm is checked. On every CGM reading and from an alarm, not WorkManager (see EngineKeepAlive).
     engineKeepAlive.start()
+}
+
+/**
+ * The pump the engine takes records from is the phone's (see [HandoverSnapshot.PumpIdentity]), whatever an
+ * earlier run registered. Without one from the phone none is registered, so the pump's first record registers it.
+ */
+private fun EngineGraph.takePumpIdentity(identity: HandoverSnapshot.PumpIdentity?) {
+    if (identity == null) {
+        preferences.remove(StringNonKey.ActivePumpType)
+        preferences.remove(StringNonKey.ActivePumpSerialNumber)
+        preferences.remove(LongNonKey.ActivePumpChangeTimestamp)
+        medtrumWatchLink.note("Engine: the phone sent no pump identity, the pump's first record registers it")
+        return
+    }
+    preferences.put(StringNonKey.ActivePumpType, identity.type)
+    preferences.put(StringNonKey.ActivePumpSerialNumber, identity.serial)
+    preferences.put(LongNonKey.ActivePumpChangeTimestamp, identity.since)
+    medtrumWatchLink.note("Engine: records taken from ${identity.type} ${identity.serial}, as on the phone")
 }
 
 /**

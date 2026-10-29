@@ -4,9 +4,13 @@ import android.app.AlarmManager
 import android.content.Context
 import androidx.work.WorkManager
 import androidx.work.testing.WorkManagerTestInitHelper
+import app.aaps.core.data.pump.defs.PumpType
 import app.aaps.core.interfaces.configuration.ExternalOptions
+import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.weardata.EventData
+import app.aaps.core.keys.LongNonKey
+import app.aaps.core.keys.StringNonKey
 import app.aaps.core.objects.di.CoreObjectsGraph
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.pump.medtrum.MedtrumPlugin
@@ -81,15 +85,52 @@ class EngineStartTest {
     @Test
     fun withAPatchSessionThePumpIsTheMedtrumDriver() = runBlocking {
         val graph = graph()
-        val session = MedtrumSession(
-            exportedAt = 1_793_222_415_279L,
-            values = mapOf(MedtrumStringNonKey.SnInput.key to "FC41637C", MedtrumIntNonKey.PumpState.key to MedtrumPumpState.ACTIVE.state.toInt().toString())
-        )
 
-        graph.startEngine(settings = null, pumpSession = session.toText())
+        graph.startEngine(settings = null, pumpSession = patchSession())
 
         assertThat(graph.medtrumWatchLink.holdsSession).isTrue()
         assertThat(graph.activePlugin.activePump.selectedActivePump()).isInstanceOf(MedtrumPlugin::class.java)
+    }
+
+    private fun patchSession(): String = MedtrumSession(
+        exportedAt = 1_793_222_415_279L,
+        values = mapOf(MedtrumStringNonKey.SnInput.key to "FC41637C", MedtrumIntNonKey.PumpState.key to MedtrumPumpState.ACTIVE.state.toInt().toString())
+    ).toText()
+
+    /** What an earlier test run without a patch left on the watch: the virtual pump registered. */
+    private fun EngineGraph.registerTheVirtualPump() {
+        preferences.put(StringNonKey.ActivePumpType, PumpType.GENERIC_AAPS.description)
+        preferences.put(StringNonKey.ActivePumpSerialNumber, "N2XV9PYK83")
+        preferences.put(LongNonKey.ActivePumpChangeTimestamp, 1_792_000_000_000L)
+    }
+
+    /**
+     * Found on the watch: it still had the virtual pump of an earlier test registered, and threw away the
+     * patch's records ("Ignoring pump history record"). The engine takes the pump the phone takes records from.
+     */
+    @Test
+    fun theEngineTakesRecordsFromThePhonesPump() = runBlocking {
+        val graph = graph()
+        graph.registerTheVirtualPump()
+        val phones = HandoverSnapshot.PumpIdentity(type = PumpType.MEDTRUM_NANO.description, serial = "fc41637c", since = 1_793_290_348_000L)
+
+        graph.startEngine(settings = null, pumpSession = patchSession(), pumpIdentity = phones)
+
+        assertThat(graph.pumpSync.verifyPumpIdentification(PumpType.MEDTRUM_NANO, "fc41637c")).isTrue()
+        // From the phone's time: a temporary basal the phone set before the handover ends on the watch
+        assertThat(graph.preferences.get(LongNonKey.ActivePumpChangeTimestamp)).isEqualTo(phones.since)
+    }
+
+    /** A phone without a registered pump: the old one goes, so the patch's first record registers the patch. */
+    @Test
+    fun withoutThePhonesPumpTheOldOneGoes() = runBlocking {
+        val graph = graph()
+        graph.registerTheVirtualPump()
+
+        graph.startEngine(settings = null, pumpSession = patchSession(), pumpIdentity = null)
+
+        assertThat(graph.preferences.get(StringNonKey.ActivePumpType)).isEmpty()
+        assertThat(graph.preferences.get(StringNonKey.ActivePumpSerialNumber)).isEmpty()
     }
 
     /**

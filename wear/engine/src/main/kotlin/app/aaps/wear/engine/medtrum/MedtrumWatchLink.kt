@@ -33,6 +33,7 @@ import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -106,6 +107,29 @@ class MedtrumWatchLink(
         started = true
         medtrumPump.loadVarsFromSP()
         _status.update { it.copy(serial = currentSerial(), log = tailLines(), extras = savedExtras()) }
+        logReads()
+    }
+
+    /**
+     * Every read of the patch in the test log, with what asked for it: the keep alive, the loop, a button. The
+     * driver reads by itself (the keep alive reads when the last one is 15 minutes old), so the button's reads
+     * were all the log had. A connection is a read when the patch was last heard of more than a minute before;
+     * the line is written a few seconds later, when the read is done.
+     */
+    private fun logReads() {
+        scope.launch {
+            var lastSeen = medtrumPump.lastConnection
+            medtrumPump.lastConnectionFlow.collect { at ->
+                val newRead = at - lastSeen > NEW_READ_GAP_MS && at > System.currentTimeMillis() - NEW_READ_GAP_MS
+                lastSeen = at
+                if (!newRead || !holdsSession) return@collect
+                val reason = commandQueue.performing()?.log() ?: "the patch"
+                scope.launch {
+                    delay(READ_DONE_WAIT_MS)
+                    log("Read ok ($reason): ${describeForLog()}")
+                }
+            }
+        }
     }
 
     /**
@@ -144,7 +168,8 @@ class MedtrumWatchLink(
             log("Read (button): through the driver")
             val result = commandQueue.readStatus("Watch: Read status button")
             val ok = result.success && medtrumPlugin.isInitialized()
-            log(if (ok) "Read ok: ${describeForLog()}" else "Read failed: ${result.comment}")
+            // A good read is logged with every other read (see logReads)
+            if (!ok) log("Read failed: ${result.comment}")
             _status.update { it.copy(reading = false, lastReadAt = System.currentTimeMillis(), lastReadOk = ok, result = if (ok) describe() else it.result) }
         }
     }
@@ -285,6 +310,12 @@ class MedtrumWatchLink(
     companion object {
 
         private const val SCREEN_LINES = 40
+
+        /** A connection after this much silence from the patch is a new read. */
+        private const val NEW_READ_GAP_MS = 60_000L
+
+        /** A read takes a few seconds; the history is synced by then. */
+        private const val READ_DONE_WAIT_MS = 10_000L
 
         private const val LOG_FOR_PHONE_FILE = "handover/test_log_for_phone.txt"
         private const val STATE_FILE = "medtrum_watch_test"

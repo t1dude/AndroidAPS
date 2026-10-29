@@ -185,7 +185,7 @@ object WatchEngine {
         graph?.engineKeepAlive?.onAlarm()
     }
 
-    private class Snapshot(val settings: Map<String, String>, val pumpSession: String)
+    private class Snapshot(val settings: Map<String, String>, val pumpSession: String, val pumpIdentity: HandoverSnapshot.PumpIdentity?)
 
     private fun pendingSnapshotFile() = File(context.filesDir, PENDING_SNAPSHOT)
 
@@ -227,7 +227,8 @@ object WatchEngine {
             Log.i(TAG, "Handover snapshot taken in: database ${database.size / 1024} KB, made ${manifest[HandoverSnapshot.KEY_CREATED_AT]} by ${manifest[HandoverSnapshot.KEY_BUILD_VERSION]}, engineering mode $engineeringMode, test run ${pumpSession.isEmpty()}")
             return Snapshot(
                 settings = HandoverSnapshot.decodeLines(entries[HandoverSnapshot.SETTINGS]?.decodeToString().orEmpty()),
-                pumpSession = pumpSession
+                pumpSession = pumpSession,
+                pumpIdentity = HandoverSnapshot.PumpIdentity.of(manifest)
             )
         } catch (e: Exception) {
             Log.e(TAG, "Handover snapshot could not be read", e)
@@ -245,7 +246,7 @@ object WatchEngine {
      */
     private fun startFromSnapshot(snapshot: Snapshot) {
         val pumpSession = snapshot.pumpSession.takeIf { it.isNotEmpty() }
-        start(settings = snapshot.settings, pumpSession = pumpSession, setRunningMode = { graph -> openLoop(graph) }) { graph ->
+        start(settings = snapshot.settings, pumpSession = pumpSession, pumpIdentity = snapshot.pumpIdentity, setRunningMode = { graph -> openLoop(graph) }) { graph ->
             graph.medtrumWatchLink.start()
             if (pumpSession == null) graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
         }
@@ -304,6 +305,7 @@ object WatchEngine {
     private fun start(
         settings: Map<String, String>? = null,
         pumpSession: String? = null,
+        pumpIdentity: HandoverSnapshot.PumpIdentity? = null,
         setRunningMode: suspend (EngineGraph) -> Boolean = { true },
         then: (EngineGraph) -> Unit
     ) {
@@ -313,7 +315,7 @@ object WatchEngine {
             try {
                 startMutex.withLock {
                     if (!started) {
-                        graph.startEngine(settings, pumpSession) { setRunningMode(graph) }
+                        graph.startEngine(settings, pumpSession, pumpIdentity) { setRunningMode(graph) }
                         started = true
                     }
                 }

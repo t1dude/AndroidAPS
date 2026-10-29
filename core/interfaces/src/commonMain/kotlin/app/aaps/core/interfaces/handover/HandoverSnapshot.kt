@@ -9,7 +9,7 @@ package app.aaps.core.interfaces.handover
  *   not exportable, so they do not travel (a paired device's address, the Nightscout token, ...).
  * - [PUMP_SESSION]: the pump driver's session, in the driver's own text form.
  * - [MANIFEST]: `name<TAB>value` lines: [KEY_DATABASE_VERSION], [KEY_BUILD_VERSION], [KEY_CREATED_AT],
- *   [KEY_ENGINEERING_MODE].
+ *   [KEY_ENGINEERING_MODE], and the phone's [PumpIdentity] when it has one.
  */
 object HandoverSnapshot {
 
@@ -33,6 +33,36 @@ object HandoverSnapshot {
      * watch has no such folder, so it takes the phone's state; without it a dev build keeps closed loop off.
      */
     const val KEY_ENGINEERING_MODE = "engineering_mode"
+
+    /**
+     * The pump AAPS takes records from, as the phone has it registered (see [PumpIdentity]). Not in [SETTINGS]:
+     * it is device state, not exportable.
+     */
+    const val KEY_PUMP_TYPE = "pump_type"
+    const val KEY_PUMP_SERIAL = "pump_serial"
+    const val KEY_PUMP_SINCE = "pump_since"
+
+    /**
+     * The pump AAPS takes records from: its type and serial, and the time from which its records count. The
+     * watch must take the phone's: found on the watch, it still had the virtual pump of an earlier test
+     * registered, and threw away the patch's own records. The phone's time, not one made on the watch: a
+     * record of the handover may start before it (a temporary basal the phone set).
+     */
+    data class PumpIdentity(val type: String, val serial: String, val since: Long) {
+
+        fun toManifest(): Map<String, String> = mapOf(KEY_PUMP_TYPE to type, KEY_PUMP_SERIAL to serial, KEY_PUMP_SINCE to since.toString())
+
+        companion object {
+
+            /** The identity in [manifest], or null when the phone had none registered. */
+            fun of(manifest: Map<String, String>): PumpIdentity? {
+                val type = manifest[KEY_PUMP_TYPE]?.takeIf { it.isNotEmpty() } ?: return null
+                val serial = manifest[KEY_PUMP_SERIAL]?.takeIf { it.isNotEmpty() } ?: return null
+                val since = manifest[KEY_PUMP_SINCE]?.toLongOrNull() ?: return null
+                return PumpIdentity(type, serial, since)
+            }
+        }
+    }
 
     /** How far back the records go: autosens looks at 24 hours, the insulin of the hours before still acts. */
     const val WINDOW_HOURS = 30L

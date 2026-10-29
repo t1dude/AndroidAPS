@@ -77,8 +77,12 @@ class EngineReporter(
         lastReportedRun = run.lastAPSRun
         val result = run.constraintsProcessed ?: run.request
         val suggestion = result?.let {
-            if (it.isChangeRequested()) "temp basal ${"%.2f".format(Locale.US, it.rate)} U/h for ${it.duration} min, SMB ${"%.2f".format(Locale.US, it.smb)} U"
-            else "no change"
+            if (!it.isChangeRequested()) "no change"
+            else {
+                // Without a new temp basal the duration is -1: an SMB alone keeps the one that runs
+                val basal = if (it.isTempBasalRequested) "temp basal ${"%.2f".format(Locale.US, it.rate)} U/h for ${it.duration} min" else "keep the temp basal"
+                "$basal, SMB ${"%.2f".format(Locale.US, it.smb)} U"
+            }
         } ?: "no result"
         link.note("Loop ran (${run.source ?: "?"}): $suggestion (battery ${battery()} %)")
     }

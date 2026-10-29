@@ -10,7 +10,9 @@
     <string name="medtrum_watch_read_failed" comment="%1$s=time, for example 14:05">Read failed at %1$s</string>
     <string name="medtrum_watch_result" comment="%1$s=pump state, for example Active; %2$.1f=units left; %3$.2f=battery volts; %4$.2f=basal rate in U/h; %5$s=basal type, for example STANDARD; %6$d=seconds the patch clock is off">%1$s\nReservoir %2$.1f U\nBattery %3$.2f V\nBasal %4$.2f U/h (%5$s)\nPatch clock off by %6$d s</string>
     <string name="medtrum_watch_read">Read status</string>
-    <string name="medtrum_watch_reading">Reading…</string>
+    <string name="medtrum_watch_busy">Talking to the patch…</string>
+    <string name="medtrum_watch_zero_temp">Test: 0 U/h for 30 min</string>
+    <string name="medtrum_watch_cancel_temp">Cancel temp basal</string>
     <string name="medtrum_watch_hand_back">Hand back to phone</string>
     <string name="engine_test_run">The engine runs without a patch (test): open loop with the virtual pump. The phone keeps the patch.</string>
     <string name="engine_stop_test_run">Stop engine</string>

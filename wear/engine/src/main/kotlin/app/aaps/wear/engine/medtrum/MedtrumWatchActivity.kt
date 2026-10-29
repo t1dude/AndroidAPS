@@ -39,7 +39,7 @@ import kotlin.math.roundToInt
 
 /**
  * Handover test on the watch: the Medtrum patch session the phone handed over. Reads the patch status through
- * the engine's driver and hands the session back. In a test run without a patch, it stops the engine.
+ * the engine's driver, sets and cancels step 3's zero temp basal, and hands the session back. In a test run without a patch, it stops the engine.
  */
 class MedtrumWatchActivity : ComponentActivity() {
 
@@ -85,8 +85,18 @@ class MedtrumWatchActivity : ComponentActivity() {
                                 }
                             }
                             item {
-                                Button(onClick = { link.readNow() }, enabled = !status.reading, modifier = Modifier.fillMaxWidth()) {
-                                    Text(stringResource(if (status.reading) R.string.medtrum_watch_reading else R.string.medtrum_watch_read))
+                                Button(onClick = { link.readNow() }, enabled = !status.busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(if (status.busy) R.string.medtrum_watch_busy else R.string.medtrum_watch_read))
+                                }
+                            }
+                            item {
+                                Button(onClick = { link.setZeroTempBasal() }, enabled = !status.busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.medtrum_watch_zero_temp))
+                                }
+                            }
+                            item {
+                                Button(onClick = { link.cancelTempBasal() }, enabled = !status.busy, modifier = Modifier.fillMaxWidth()) {
+                                    Text(stringResource(R.string.medtrum_watch_cancel_temp))
                                 }
                             }
                             item {

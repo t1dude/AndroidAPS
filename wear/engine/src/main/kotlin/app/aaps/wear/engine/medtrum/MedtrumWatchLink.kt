@@ -12,7 +12,9 @@ import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.handover.HandoverSnapshot
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
+import app.aaps.core.interfaces.profile.ProfileFunction
 import app.aaps.core.interfaces.pump.PumpSync
+import app.aaps.core.interfaces.pump.PumpEnactResult
 import app.aaps.core.interfaces.queue.CommandQueue
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.keys.interfaces.Preferences
@@ -41,6 +43,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -69,13 +72,15 @@ class MedtrumWatchLink(
     private val medtrumPump: MedtrumPump,
     private val medtrumPlugin: MedtrumPlugin,
     private val commandQueue: CommandQueue,
-    private val pumpSync: PumpSync
+    private val pumpSync: PumpSync,
+    private val profileFunction: ProfileFunction
 ) {
 
     data class Status(
         /** The patch serial, 0 when the watch has no session. */
         val serial: Long = 0L,
-        val reading: Boolean = false,
+        /** A read or a command of the buttons is running. */
+        val busy: Boolean = false,
         val lastReadAt: Long? = null,
         val lastReadOk: Boolean? = null,
         /** What the last good read found, ready to show. */
@@ -160,17 +165,67 @@ class MedtrumWatchLink(
         notifySessionReceived()
     }
 
-    /** One status read through the engine's Medtrum driver, as the "Read status" button does. */
+    /**
+     * One status read through the engine's Medtrum driver, as the "Read status" button does. When a read runs
+     * already (the driver's own at the start, the keep alive's), the button waits for that one: the queue
+     * refuses a second, and that is no failure.
+     */
     fun readNow() {
-        if (!_status.value.hasSession || _status.value.reading) return
-        _status.update { it.copy(reading = true) }
+        if (!_status.value.hasSession || _status.value.busy) return
+        _status.update { it.copy(busy = true) }
         scope.launch {
-            log("Read (button): through the driver")
-            val result = commandQueue.readStatus("Watch: Read status button")
-            val ok = result.success && medtrumPlugin.isInitialized()
+            val ok = if (commandQueue.statusInQueue()) {
+                log("Read (button): a read runs already, the button waits for it")
+                withTimeoutOrNull(READ_RUNNING_WAIT_MS) { while (commandQueue.statusInQueue()) delay(POLL_MS) }
+                val ok = medtrumPump.lastConnection > System.currentTimeMillis() - NEW_READ_GAP_MS && medtrumPlugin.isInitialized()
+                if (!ok) log("Read failed: the read that ran did not reach the patch")
+                ok
+            } else {
+                log("Read (button): through the driver")
+                val result = commandQueue.readStatus("Watch: Read status button")
+                val ok = result.success && medtrumPlugin.isInitialized()
+                if (!ok) log("Read failed: ${result.comment}")
+                ok
+            }
             // A good read is logged with every other read (see logReads)
-            if (!ok) log("Read failed: ${result.comment}")
-            _status.update { it.copy(reading = false, lastReadAt = System.currentTimeMillis(), lastReadOk = ok, result = if (ok) describe() else it.result) }
+            _status.update { it.copy(busy = false, lastReadAt = System.currentTimeMillis(), lastReadOk = ok, result = if (ok) describe() else it.result) }
+        }
+    }
+
+    /**
+     * Step 3, supervised: a temp basal of 0 U/h for 30 minutes from the watch. The safe way, it gives less insulin.
+     * The log then says what the patch runs and what the watch's records hold: both must show it, or the watch
+     * threw the patch's record away.
+     */
+    fun setZeroTempBasal() = runCommand("Zero temp basal (button): 0 U/h for $ZERO_TEMP_MINUTES min") {
+        val profile = profileFunction.getProfile() ?: return@runCommand null
+        commandQueue.tempBasalAbsolute(0.0, ZERO_TEMP_MINUTES, enforceNew = true, profile = profile, tbrType = PumpSync.TemporaryBasalType.NORMAL)
+    }
+
+    /** Step 3: cancels the temp basal that runs, with the same check as [setZeroTempBasal]. */
+    fun cancelTempBasal() = runCommand("Cancel temp basal (button)") {
+        commandQueue.cancelTempBasal(enforceNew = true)
+    }
+
+    /** Runs one pump command of the buttons. [command] returns null when it could not be sent (no profile). */
+    private fun runCommand(what: String, command: suspend () -> PumpEnactResult?) {
+        if (!_status.value.hasSession || _status.value.busy) return
+        _status.update { it.copy(busy = true) }
+        scope.launch {
+            try {
+                log(what)
+                val result = command()
+                when {
+                    result == null  -> log("Not sent: no profile")
+                    result.success  -> log("Done${if (result.enacted) "" else " (nothing to change)"}: ${result.comment}")
+                    else            -> log("Failed: ${result.comment}")
+                }
+                val recorded = pumpSync.expectedPumpState().temporaryBasal?.let { HandoverTemporaryBasal.of(it) }
+                log("Patch runs: basal ${num(medtrumPump.lastBasalRate)} U/h ${medtrumPump.lastBasalType}. Watch's records: temporary basal ${describe(recorded)}")
+                _status.update { it.copy(result = describe(), extras = it.extras.copy(temporaryBasal = recorded)) }
+            } finally {
+                _status.update { it.copy(busy = false) }
+            }
         }
     }
 
@@ -316,6 +371,13 @@ class MedtrumWatchLink(
 
         /** A read takes a few seconds; the history is synced by then. */
         private const val READ_DONE_WAIT_MS = 10_000L
+
+        /** How long the button waits for a read that runs already. A read that cannot connect gives up sooner. */
+        private const val READ_RUNNING_WAIT_MS = 120_000L
+        private const val POLL_MS = 500L
+
+        /** Step 3's temp basal, as agreed in the plan. */
+        private const val ZERO_TEMP_MINUTES = 30
 
         private const val LOG_FOR_PHONE_FILE = "handover/test_log_for_phone.txt"
         private const val STATE_FILE = "medtrum_watch_test"

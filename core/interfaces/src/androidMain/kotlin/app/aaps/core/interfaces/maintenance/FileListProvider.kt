@@ -12,6 +12,12 @@ interface FileListProvider : PrefsFileInfo {
     fun ensureTempDirExists(): DocumentFile?
     fun ensureExtraDirExists(): DocumentFile?
 
+    /**
+     * The folder for the files of a handover between the phone and the watch: the pump session copy, the
+     * session the watch hands back, and the watch's test log. Kept apart from the exports.
+     */
+    fun ensureHandoverDirExists(): DocumentFile?
+
     fun newPreferenceFile(): DocumentFile?
     fun newExportCsvFile(): DocumentFile?
     fun newCwfFile(filename: String, withDate: Boolean = true): DocumentFile?

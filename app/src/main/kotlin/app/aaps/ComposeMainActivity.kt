@@ -132,6 +132,7 @@ import app.aaps.ui.search.SearchViewModel
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dev.zacsweers.metro.Inject
 import io.reactivex.rxjava3.disposables.CompositeDisposable
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.launch
 import app.aaps.core.ui.R as CoreUiR
@@ -263,7 +264,7 @@ class ComposeMainActivity : MetroAppCompatActivity() {
                 val lastPathSegment = uri.lastPathSegment ?: ""
                 val pathAfterColon = if (lastPathSegment.contains(":")) lastPathSegment.substringAfterLast(":") else lastPathSegment
                 val directoryName = pathAfterColon.substringAfterLast("/", pathAfterColon)
-                val managedSubdirectories = listOf("preferences", "extra", "exports", "temp")
+                val managedSubdirectories = listOf("preferences", "extra", "exports", "temp", "handover")
                 if (managedSubdirectories.any { it.equals(directoryName, ignoreCase = true) }) {
                     rxBus.send(
                         EventShowDialog.Error(
@@ -275,6 +276,8 @@ class ComposeMainActivity : MetroAppCompatActivity() {
                 }
                 contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION)
                 preferences.put(StringKey.AapsDirectoryUri, uri.toString())
+                // Part of the setup: the handover folder is there before the first handover needs it
+                lifecycleScope.launch(Dispatchers.IO) { prefFileList.ensureHandoverDirExists() }
             }
         }
         requestMultiplePermissions = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { permissions ->

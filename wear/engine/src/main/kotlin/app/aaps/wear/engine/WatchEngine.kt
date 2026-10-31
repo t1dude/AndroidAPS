@@ -47,7 +47,7 @@ import java.util.zip.ZipInputStream
  * files directly, without building anything.
  *
  * A test run ([isTestRun]) is the one case where the engine runs without a pump session: the phone sent
- * the snapshot alone and kept the patch. The engine runs on its virtual pump, in open loop, until it is
+ * the snapshot alone and kept the patch. The engine runs on its virtual pump, in LGS, until it is
  * stopped on the watch ([stopTestRun]). It is for test T2: battery, and a steady loop over a night.
  */
 object WatchEngine {
@@ -241,34 +241,34 @@ object WatchEngine {
     /**
      * Starts the engine from a snapshot: the phone's settings and the pump session go in before the plugins
      * start, so the engine's Medtrum driver starts with its patch (the virtual pump in a test run without
-     * one). The loop goes to open loop (it suggests, it does not dose) before the running mode check starts,
-     * see `startEngine`.
+     * one). The loop goes to LGS (it lowers or stops the basal, never gives more: `WatchEngineSafetyPlugin`)
+     * before the running mode check starts, see `startEngine`.
      */
     private fun startFromSnapshot(snapshot: Snapshot) {
         val pumpSession = snapshot.pumpSession.takeIf { it.isNotEmpty() }
-        start(settings = snapshot.settings, pumpSession = pumpSession, pumpIdentity = snapshot.pumpIdentity, setRunningMode = { graph -> openLoop(graph) }) { graph ->
+        start(settings = snapshot.settings, pumpSession = pumpSession, pumpIdentity = snapshot.pumpIdentity, setRunningMode = { graph -> lgs(graph) }) { graph ->
             graph.medtrumWatchLink.start()
-            if (pumpSession == null) graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
+            if (pumpSession == null) graph.medtrumWatchLink.note("----- Engine test run: no patch, the phone keeps it. Virtual pump, LGS.")
         }
     }
 
-    /** True when the loop is in open loop now. */
-    private suspend fun openLoop(graph: EngineGraph): Boolean = try {
+    /** True when the loop is in LGS now. */
+    private suspend fun lgs(graph: EngineGraph): Boolean = try {
         val profile = graph.profileFunction.getProfile()
         if (profile == null) {
             graph.aapsLogger.warn(LTag.CORE, "Engine: no profile, the loop stays as it was")
             graph.medtrumWatchLink.note("Engine: no profile, the loop stays as it was")
             false
         } else {
-            val done = graph.loop.handleRunningModeChange(RM.Mode.OPEN_LOOP, Action.OPEN_LOOP_MODE, Sources.Aaps, profile = profile)
-            graph.aapsLogger.info(LTag.CORE, "Engine: open loop ${if (done) "set" else "could not be set"}")
-            graph.medtrumWatchLink.note("Engine: profile ${graph.profileFunction.getProfileName()}, open loop ${if (done) "set" else "could not be set"}")
+            val done = graph.loop.handleRunningModeChange(RM.Mode.CLOSED_LOOP_LGS, Action.LGS_LOOP_MODE, Sources.Aaps, profile = profile)
+            graph.aapsLogger.info(LTag.CORE, "Engine: LGS ${if (done) "set" else "could not be set"}")
+            graph.medtrumWatchLink.note("Engine: profile ${graph.profileFunction.getProfileName()}, LGS ${if (done) "set" else "could not be set"}")
             done
         }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        graph.aapsLogger.error(LTag.CORE, "Engine: open loop failed", e)
+        graph.aapsLogger.error(LTag.CORE, "Engine: LGS failed", e)
         false
     }
 

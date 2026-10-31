@@ -11,6 +11,7 @@ import app.aaps.core.interfaces.di.MetroMemberInjector
 import app.aaps.core.interfaces.rx.weardata.EventData
 import app.aaps.core.keys.LongNonKey
 import app.aaps.core.keys.StringNonKey
+import app.aaps.core.objects.constraints.ConstraintObject
 import app.aaps.core.objects.di.CoreObjectsGraph
 import app.aaps.database.di.DatabaseConfig
 import app.aaps.pump.medtrum.MedtrumPlugin
@@ -131,6 +132,22 @@ class EngineStartTest {
 
         assertThat(graph.preferences.get(StringNonKey.ActivePumpType)).isEmpty()
         assertThat(graph.preferences.get(StringNonKey.ActivePumpSerialNumber)).isEmpty()
+    }
+
+    /**
+     * The engine's limits (step 4): the loop asks for a zero temp of 120 minutes, the watch sets 30 at most, so a
+     * watch that dies leaves the profile basal again within half an hour. And LGS only.
+     */
+    @Test
+    fun theWatchSetsShortTempBasalsAndLgsOnly() = runBlocking {
+        val graph = graph()
+
+        graph.startEngine(settings = null, pumpSession = patchSession())
+
+        assertThat(graph.pluginStore.plugins.filterIsInstance<WatchEngineSafetyPlugin>().single().isEnabled()).isTrue()
+        assertThat(graph.constraintsChecker.applyTempBasalDurationConstraints(ConstraintObject(120, graph.aapsLogger)).value()).isEqualTo(30)
+        assertThat(graph.constraintsChecker.applyTempBasalDurationConstraints(ConstraintObject(20, graph.aapsLogger)).value()).isEqualTo(20)
+        assertThat(graph.constraintsChecker.isLgsForced().value()).isTrue()
     }
 
     /**

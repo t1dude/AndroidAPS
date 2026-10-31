@@ -603,6 +603,10 @@ class LoopPlugin(
             resultAfterConstraints.rate = constraintChecker.applyBasalConstraints(resultAfterConstraints.rateConstraint!!, profile).value()
             resultAfterConstraints.percentConstraint = ConstraintObject(resultAfterConstraints.percent, aapsLogger)
             resultAfterConstraints.percent = constraintChecker.applyBasalPercentConstraints(resultAfterConstraints.percentConstraint!!, profile).value()
+            // Here and not only in the queue: the request is compared with the temp basal that runs, so a longer one
+            // than the pump may get would be sent again on every run
+            if (resultAfterConstraints.duration > 0)
+                resultAfterConstraints.duration = constraintChecker.applyTempBasalDurationConstraints(ConstraintObject(resultAfterConstraints.duration, aapsLogger)).value()
             resultAfterConstraints.smbConstraint = ConstraintObject(resultAfterConstraints.smb, aapsLogger)
             resultAfterConstraints.smb = constraintChecker.applyBolusConstraints(resultAfterConstraints.smbConstraint!!).value()
 

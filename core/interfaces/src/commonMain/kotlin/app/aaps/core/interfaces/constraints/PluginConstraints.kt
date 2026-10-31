@@ -20,6 +20,9 @@ interface PluginConstraints {
     fun isAutomationEnabled(value: Constraint<Boolean>): Constraint<Boolean> = value
     fun applyBasalConstraints(absoluteRate: Constraint<Double>, profile: Profile): Constraint<Double> = absoluteRate
     fun applyBasalPercentConstraints(percentRate: Constraint<Int>, profile: Profile): Constraint<Int> = percentRate
+
+    /** The longest a temporary basal may run, in minutes. The AAPS engine on a watch keeps it short: see `WatchEngineSafetyPlugin`. */
+    fun applyTempBasalDurationConstraints(minutes: Constraint<Int>): Constraint<Int> = minutes
     fun applyBolusConstraints(insulin: Constraint<Double>): Constraint<Double> = insulin
     fun applyExtendedBolusConstraints(insulin: Constraint<Double>): Constraint<Double> = insulin
     fun applyCarbsConstraints(carbs: Constraint<Int>): Constraint<Int> = carbs

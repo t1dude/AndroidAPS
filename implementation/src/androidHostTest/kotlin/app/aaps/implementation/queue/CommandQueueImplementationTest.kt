@@ -189,6 +189,7 @@ class CommandQueueImplementationTest : TestBaseWithProfile() {
             whenever(constraintChecker.applyBasalConstraints(anyOrNull(), anyOrNull())).thenReturn(rateConstraint)
             val percentageConstraint = ConstraintObject(0, aapsLogger)
             whenever(constraintChecker.applyBasalPercentConstraints(anyOrNull(), anyOrNull())).thenReturn(percentageConstraint)
+            whenever(constraintChecker.applyTempBasalDurationConstraints(anyOrNull())).thenAnswer { it.getArgument(0) }
             whenever(rh.gs(app.aaps.core.ui.R.string.connectiontimedout)).thenReturn("Connection timed out")
             whenever(rh.gs(app.aaps.implementation.R.string.executing_right_now)).thenReturn("Executing right now")
             whenever(rh.gs(app.aaps.core.ui.R.string.command_replaced)).thenReturn("Replaced by newer command")

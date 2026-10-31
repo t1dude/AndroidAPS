@@ -768,7 +768,8 @@ class CommandQueueImplementation(
             if (!enforceNew && isRunning(CommandType.TEMPBASAL)) return executingNowError()
             removeAll(CommandType.TEMPBASAL)
             val rateAfterConstraints = constraintChecker.applyBasalConstraints(ConstraintObject(absoluteRate, aapsLogger), profile).value()
-            enqueue(CommandTempBasalAbsolute(aapsLogger, rh, activePlugin, pumpEnactResultProvider, rateAfterConstraints, durationInMinutes, enforceNew, tbrType))
+            val durationAfterConstraints = constraintChecker.applyTempBasalDurationConstraints(ConstraintObject(durationInMinutes, aapsLogger)).value()
+            enqueue(CommandTempBasalAbsolute(aapsLogger, rh, activePlugin, pumpEnactResultProvider, rateAfterConstraints, durationAfterConstraints, enforceNew, tbrType))
         }
         return command.completion.await()
     }
@@ -780,7 +781,8 @@ class CommandQueueImplementation(
             if (!enforceNew && isRunning(CommandType.TEMPBASAL)) return executingNowError()
             removeAll(CommandType.TEMPBASAL)
             val percentAfterConstraints = constraintChecker.applyBasalPercentConstraints(ConstraintObject(percent, aapsLogger), profile).value()
-            enqueue(CommandTempBasalPercent(aapsLogger, rh, activePlugin, pumpEnactResultProvider, percentAfterConstraints, durationInMinutes, enforceNew, tbrType))
+            val durationAfterConstraints = constraintChecker.applyTempBasalDurationConstraints(ConstraintObject(durationInMinutes, aapsLogger)).value()
+            enqueue(CommandTempBasalPercent(aapsLogger, rh, activePlugin, pumpEnactResultProvider, percentAfterConstraints, durationAfterConstraints, enforceNew, tbrType))
         }
         return command.completion.await()
     }

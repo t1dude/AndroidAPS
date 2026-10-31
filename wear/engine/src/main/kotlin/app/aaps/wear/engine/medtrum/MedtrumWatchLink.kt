@@ -129,6 +129,8 @@ class MedtrumWatchLink(
                 lastSeen = at
                 if (!newRead || !holdsSession) return@collect
                 val reason = commandQueue.performing()?.log() ?: "the patch"
+                // The button logs its own read (see readNow)
+                if (reason.endsWith(BUTTON_READ_REASON)) return@collect
                 scope.launch {
                     delay(READ_DONE_WAIT_MS)
                     log("Read ok ($reason): ${describeForLog()}")
@@ -178,16 +180,16 @@ class MedtrumWatchLink(
                 log("Read (button): a read runs already, the button waits for it")
                 withTimeoutOrNull(READ_RUNNING_WAIT_MS) { while (commandQueue.statusInQueue()) delay(POLL_MS) }
                 val ok = medtrumPump.lastConnection > System.currentTimeMillis() - NEW_READ_GAP_MS && medtrumPlugin.isInitialized()
-                if (!ok) log("Read failed: the read that ran did not reach the patch")
+                // Not "Read ok": that read has its own line already
+                log(if (ok) "Read (button): the read that ran is done" else "Read failed: the read that ran did not reach the patch")
                 ok
             } else {
                 log("Read (button): through the driver")
-                val result = commandQueue.readStatus("Watch: Read status button")
+                val result = commandQueue.readStatus(BUTTON_READ_REASON)
                 val ok = result.success && medtrumPlugin.isInitialized()
-                if (!ok) log("Read failed: ${result.comment}")
+                log(if (ok) "Read ok (button): ${describeForLog()}" else "Read failed: ${result.comment}")
                 ok
             }
-            // A good read is logged with every other read (see logReads)
             _status.update { it.copy(busy = false, lastReadAt = System.currentTimeMillis(), lastReadOk = ok, result = if (ok) describe() else it.result) }
         }
     }
@@ -217,9 +219,12 @@ class MedtrumWatchLink(
                 val result = command()
                 when {
                     result == null  -> log("Not sent: no profile")
-                    result.success  -> log("Done${if (result.enacted) "" else " (nothing to change)"}: ${result.comment}")
+                    result.success  -> log(listOfNotNull("Done", " (nothing to change)".takeIf { !result.enacted }, result.comment.takeIf { it.isNotEmpty() }?.let { ": $it" }).joinToString(""))
                     else            -> log("Failed: ${result.comment}")
                 }
+                // The patch stamps its records a few seconds ahead of the watch: checked at once, the new temp
+                // basal had not started yet, and the line showed the one before
+                delay(CHECK_WAIT_MS)
                 val recorded = pumpSync.expectedPumpState().temporaryBasal?.let { HandoverTemporaryBasal.of(it) }
                 log("Patch runs: basal ${num(medtrumPump.lastBasalRate)} U/h ${medtrumPump.lastBasalType}. Watch's records: temporary basal ${describe(recorded)}")
                 _status.update { it.copy(result = describe(), extras = it.extras.copy(temporaryBasal = recorded)) }
@@ -375,6 +380,12 @@ class MedtrumWatchLink(
         /** How long the button waits for a read that runs already. A read that cannot connect gives up sooner. */
         private const val READ_RUNNING_WAIT_MS = 120_000L
         private const val POLL_MS = 500L
+
+        /** What the read button asks the queue for, so the read can be told from the others. */
+        private const val BUTTON_READ_REASON = "Watch: Read status button"
+
+        /** The check after a command waits for the patch's records to start. */
+        private const val CHECK_WAIT_MS = 5_000L
 
         /** Step 3's temp basal, as agreed in the plan. */
         private const val ZERO_TEMP_MINUTES = 30

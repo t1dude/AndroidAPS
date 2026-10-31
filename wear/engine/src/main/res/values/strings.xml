@@ -14,7 +14,7 @@
     <string name="medtrum_watch_zero_temp">Test: 0 U/h for 30 min</string>
     <string name="medtrum_watch_cancel_temp">Cancel temp basal</string>
     <string name="medtrum_watch_hand_back">Hand back to phone</string>
-    <string name="engine_test_run">The engine runs without a patch (test): open loop with the virtual pump. The phone keeps the patch.</string>
+    <string name="engine_test_run">The engine runs without a patch (test): LGS with the virtual pump. The phone keeps the patch.</string>
     <string name="engine_stop_test_run">Stop engine</string>
     <string name="medtrum_watch_service_channel">Medtrum test</string>
     <string name="medtrum_watch_send_log">Send log to phone</string>

@@ -6,6 +6,7 @@ import app.aaps.core.interfaces.aps.Loop
 import app.aaps.core.interfaces.bgQualityCheck.BgQualityCheck
 import app.aaps.core.interfaces.configuration.Config
 import app.aaps.core.interfaces.configuration.ConfigBuilder
+import app.aaps.core.interfaces.constraints.ConstraintsChecker
 import app.aaps.core.interfaces.di.APS
 import app.aaps.core.interfaces.di.ApplicationScope
 import app.aaps.core.interfaces.di.FeatureMemberInjectors
@@ -107,6 +108,7 @@ interface EngineGraph : MetroViewModelMultibindings {
     val loop: Loop
     val activePlugin: ActivePlugin
     val pumpSync: PumpSync
+    val constraintsChecker: ConstraintsChecker
     val engineReporter: EngineReporter
     val engineKeepAlive: EngineKeepAlive
     val context: Context

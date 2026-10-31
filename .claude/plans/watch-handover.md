@@ -96,8 +96,21 @@ Each step is a watch test before the next.
   taken from Medtrum Nano fc41637c"), no record thrown away, the temp basal went back as it came. Not a
   proof: the patch made no new record while the watch had it (history 63/63 all the time). Step 3's
   commands make records, so they test it.
-- **Step 4: LGS on the watch.** Open loop goes then (decision 8).
-- **Step 5: closed loop**, with the 30-minute limit for temp basals as an engine constraint.
+  **Third test with the patch (2026-10-30, 19:13 to 19:15).** The watch set 0 U/h for 30 minutes and
+  cancelled it; the patch ran both (history 226 to 229). The watch's records hold its own temp basal
+  (19:15:02 to 19:15:20, the phone's one cut at 19:15:02), so the pump identity works. The phone showed both
+  after hand back. The check line was written too early (the patch stamps its records about 2 seconds
+  ahead of the watch) and showed the temp basal before; it now waits 5 seconds. The patch clock was off by
+  -10 s (it was -1 s on 2026-10-29): to watch.
+- **Step 4: LGS on the watch.** Built 2026-10-30, not yet tested on the watch. The engine starts in LGS
+  instead of open loop, so open loop is gone from the watch (decision 8). `WatchEngineSafetyPlugin`, always
+  on, forces LGS (the loop may lower and stop the basal, never give more) and limits every temp basal to
+  30 minutes (`PluginConstraints.applyTempBasalDurationConstraints`, applied in the loop and in the command
+  queue). The limit came forward from step 5: in LGS the watch sets temp basals by itself, and the loop
+  asks for 0 U/h for 120 minutes, which a dead watch would leave running. Automation does not run on the
+  watch: `AutomationRuntime` is started by `MainApp`, never by the engine. The modes nobody may choose on the
+  watch are not refused yet: the watch has no screen to choose one.
+- **Step 5: closed loop**: `WatchEngineSafetyPlugin` stops forcing LGS. The 30-minute limit stays.
 
 ## What Watch-APS gives us, and what it does not
 
@@ -270,8 +283,8 @@ that needs many changes inside the phone app, which Tim avoided on purpose.
     loop), but the keep alive reads the pump status and raises the "pump unreachable" alarm. On the
     watch it needs an alarm, as the Medtrum reads have. Part of the alarm-driven loop cycle (Watch-APS
     pieces). Count how often it happens in T2.
-  - Still open: the loop asked for a zero temp of 120 min. The watch may only set 30 minutes or less
-    (Phase 2, "Watch lost or dead"); nothing enforces that yet. Needed before closed loop.
+  - The loop asked for a zero temp of 120 min. The watch may only set 30 minutes or less (Phase 2, "Watch
+    lost or dead"). Enforced since step 4 (`WatchEngineSafetyPlugin`).
 
 - New module (working name `:watchapp`): the wear companion UI plus the AAPS engine. Installed instead
   of `:wear` on handover-capable watches only (Android 12+, minSdk 31). `:wear` stays as it is for

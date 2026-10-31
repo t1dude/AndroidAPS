@@ -21,7 +21,7 @@ class EngineTestSummaryTest {
             line("10:00:00", "----- Took in the session of patch fc41637c, exported 10:00:00"),
             line("10:05:00", "Loop ran (OpenAPS SMB): temp basal 0.00 U/h for 30 min, SMB 0.00 U (battery 90 %)"),
             line("22:00:00", "Engine started: 15 of 25 plugins on, pump VirtualPumpPlugin, glucose WatchG7SourcePlugin, engineering mode true"),
-            line("22:00:01", "----- Engine test run: no patch, the phone keeps it. Virtual pump, open loop."),
+            line("22:00:01", "----- Engine test run: no patch, the phone keeps it. Virtual pump, LGS."),
             line("22:05:00", "Loop ran (OpenAPS SMB): temp basal 0.50 U/h for 30 min, SMB 0.00 U (battery 80 %)"),
             line("22:10:00", "Loop: Loop deaktivert av bruker (battery 80 %)"),
             line("22:15:00", "E/CORE: KeepAlive fail"),
@@ -34,7 +34,7 @@ class EngineTestSummaryTest {
 
         val summary = EngineTestSummary.of(lines, now = at("23:01:00"))
 
-        assertThat(summary).contains("Test: Engine test run: no patch, the phone keeps it. Virtual pump, open loop.")
+        assertThat(summary).contains("Test: Engine test run: no patch, the phone keeps it. Virtual pump, LGS.")
         assertThat(summary).contains("Since 2026-10-29 22:00:01, 1 h 0 min")
         assertThat(summary).contains("Loop runs: 3 with a result, 1 without (about 12 due)")
         assertThat(summary).contains("Longest time without a loop run: 25 min (from 22:10)")

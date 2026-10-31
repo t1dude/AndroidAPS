@@ -157,6 +157,16 @@ class ConstraintsCheckerImpl(
         return percentRate
     }
 
+    override fun applyTempBasalDurationConstraints(minutes: Constraint<Int>): Constraint<Int> {
+        val constraintsPlugins = activePlugin.getSpecificPluginsListByInterface(PluginConstraints::class)
+        for (p in constraintsPlugins) {
+            val constrain = p as PluginConstraints
+            if (!p.isEnabled()) continue
+            constrain.applyTempBasalDurationConstraints(minutes)
+        }
+        return minutes
+    }
+
     override fun applyBolusConstraints(insulin: Constraint<Double>): Constraint<Double> {
         applyPluginBolusConstraints(insulin)
         // Fold the active pump's own cU bolus cap into the IU result (single cU<->IU conversion point via ch).
